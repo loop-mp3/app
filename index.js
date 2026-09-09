@@ -3,14 +3,14 @@ const path = require("path");
 
 function createWindow() {
     const win = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        width: 1325,
+        height: 870,
         webPreferences: {
             preload: path.join(__dirname, "preload.js")
         }
     });
 
-    win.loadFile("https://music.youtube.com/");
+    win.loadURL("https://music.youtube.com/");
 }
 
 app.whenReady().then(() => {
