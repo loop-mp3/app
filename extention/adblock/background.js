@@ -35,7 +35,7 @@ function broadcastStatusUpdate(action, args) {
 
 function getSubscribedChannels() {
     return new Promise((resolve, _) => {
-        chrome.storage.sync.get({ subscribes: {} }, function (result) {
+        chrome.storage.local.get({ subscribes: {} }, function (result) {
             resolve(result.subscribes);
         });
     });
@@ -58,7 +58,7 @@ function checkIfServiceEnabled(serviceName) {
     return new Promise((resolve, _) => {
         if (!serviceName)
             return resolve(false);
-        chrome.storage.sync.get(serviceName, function (result) {
+        chrome.storage.local.get(serviceName, function (result) {
             var isEnabled = true;
             if (result[serviceName] !== undefined)
                 isEnabled = result[serviceName];
@@ -70,7 +70,7 @@ function checkIfServiceEnabled(serviceName) {
 function checkIfDebugModeEnabled() {
     // Check if debug mode is enabled
     return new Promise((resolve, _) => {
-        chrome.storage.sync.get({ debugMode: false }, function (result) {
+        chrome.storage.local.get({ debugMode: false }, function (result) {
             resolve(result.debugMode);
         });
     });
@@ -90,7 +90,7 @@ function handleSubscriptionUpdate(request, sender, sendResponse) {
     var isSubscribed = request.isSubscribed;
     getSubscribedChannels().then(subscribes => {
         subscribes[channelId] = isSubscribed;
-        chrome.storage.sync.set({ subscribes: subscribes }, function () {
+        chrome.storage.local.set({ subscribes: subscribes }, function () {
             sendResponse({ success: true });
             broadcastStatusUpdate('adblock-channel-subscription-updated', {});
         });
@@ -118,7 +118,7 @@ function handleServiceStatusUpdate(request, sender, sendResponse) {
     // handle the service status update
     var serviceName = request.serviceName;
     var isEnabled = request.isEnabled;
-    chrome.storage.sync.set({ [serviceName]: isEnabled }, function () {
+    chrome.storage.local.set({ [serviceName]: isEnabled }, function () {
         sendResponse({ success: true });
     });
     broadcastStatusUpdate(
@@ -139,7 +139,7 @@ function handleDebugModeQuery(request, sender, sendResponse) {
 function handleDebugModeUpdate(request, sender, sendResponse) {
     // handle the debug mode update
     var isDebugModeEnabled = request.isDebugModeEnabled;
-    chrome.storage.sync.set({ debugMode: isDebugModeEnabled }, function () {
+    chrome.storage.local.set({ debugMode: isDebugModeEnabled }, function () {
         sendResponse({ success: true });
         broadcastStatusUpdate(
             'debug-mode-updated', {
