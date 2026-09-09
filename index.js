@@ -70,8 +70,8 @@ async function createWindow() {
     await loadExtensions();
 
     const win = new BrowserWindow({
-        width: 850,
-        height: 650,
+        width: 900,
+        height: 600,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,
