@@ -1,0 +1,53 @@
+{
+   "badge_code": {
+      "message": "../images/GetItOnGooglePlay_Badge_Web_color_English.png"
+   },
+   "brand": {
+      "message": "JadSkip: Adblock for Youtube and Youtube Music"
+   },
+   "brand_desc": {
+      "message": "Block ads on YouTube and YouTube Music, make sure to disable all other extensions before using."
+   },
+   "copied": {
+      "message": "Copied!"
+   },
+   "copy_debug_log": {
+      "message": "Copy Debug Log"
+   },
+   "debug_log": {
+      "message": "Debug Log"
+   },
+   "failed": {
+      "message": "Failed!"
+   },
+   "log_not_found": {
+      "message": "Debug log not found on this page."
+   },
+   "manage": {
+      "message": "Manage"
+   },
+   "manage_desc": {
+      "message": "\u003Ca href=\"https://www.youtube.com/feed/channels\" target=\"_blank\">Manage\u003C/a> ads on subscribed channels"
+   },
+   "off": {
+      "message": "Off"
+   },
+   "on": {
+      "message": "On"
+   },
+   "report_chrome_desc": {
+      "message": "\u003Cp>Report issues on \u003Ca href=\"https://chromewebstore.google.com/detail/kcgbbbjpeiaaiokphejajemebphalmii/support\" target=\"_blank\">Chrome Web Store\u003C/a>\u003C/p>"
+   },
+   "report_github_desc": {
+      "message": "\u003Cp data-locale=\"report_github_desc\">Report issues on \u003Ca href=\"https://github.com/JC-comp/JAdSkip/issues\" target=\"_blank\">GitHub\u003C/a>\u003C/p>"
+   },
+   "update_success": {
+      "message": "Hurray! The extension has been updated successfully."
+   },
+   "version": {
+      "message": "Version"
+   },
+   "welcome_message": {
+      "message": "Welcome to JadSkip!\u003Cbr>Please disable other ad blockers\u003Cbr>and reload the page."
+   }
+}

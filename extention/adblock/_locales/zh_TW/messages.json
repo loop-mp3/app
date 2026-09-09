@@ -1,0 +1,53 @@
+{
+   "badge_code": {
+      "message": "../images/GetItOnGooglePlay_Badge_Web_color_Chinese-TW.png"
+   },
+   "brand": {
+      "message": "JadSkip: YouTube 和 YouTube Music 的廣告攔截器"
+   },
+   "brand_desc": {
+      "message": "在 YouTube 和 YouTube Music 上阻擋廣告，使用前請確保停用所有其他擴充功能。"
+   },
+   "copied": {
+      "message": "已複製！"
+   },
+   "copy_debug_log": {
+      "message": "複製除錯日誌"
+   },
+   "debug_log": {
+      "message": "除錯日誌"
+   },
+   "failed": {
+      "message": "失敗！"
+   },
+   "log_not_found": {
+      "message": "此網頁上找不到除錯日誌"
+   },
+   "manage": {
+      "message": "管理"
+   },
+   "manage_desc": {
+      "message": "依照頻道 \u003Ca href=\"https://www.youtube.com/feed/channels\" target=\"_blank\">管理\u003C/a> 廣告投放"
+   },
+   "off": {
+      "message": "關"
+   },
+   "on": {
+      "message": "開"
+   },
+   "report_chrome_desc": {
+      "message": "\u003Cp>在 \u003Ca href=\"https://chromewebstore.google.com/detail/kcgbbbjpeiaaiokphejajemebphalmii/support\" target=\"_blank\">Chrome線上應用程式商店\u003C/a> 上回報問題\u003C/p>"
+   },
+   "report_github_desc": {
+      "message": "\u003Cp>在 \u003Ca href=\"https://github.com/JC-comp/JAdSkip/issues\" target=\"_blank\">GitHub\u003C/a> 上回報問題\u003C/p>"
+   },
+   "update_success": {
+      "message": "太好了！擴充功能已成功更新"
+   },
+   "version": {
+      "message": "版本"
+   },
+   "welcome_message": {
+      "message": "歡迎使用 JadSkip！\u003Cbr>請停用其他廣告攔截器\u003Cbr>並重新載入頁面"
+   }
+}

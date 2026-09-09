@@ -1,0 +1,46 @@
+{
+   "action": {
+      "default_icon": "assets/icon-120.png",
+      "default_popup": "html/popup.html"
+   },
+   "background": {
+      "service_worker": "background.js",
+      "type": "module"
+   },
+   "content_scripts": [ {
+      "js": [ "js/utils.js", "js/core/logger.js", "js/subscribe/content_script.js", "js/core/content_script.js" ],
+      "matches": [ "https://www.youtube.com/*" ]
+   }, {
+      "js": [ "js/core/function.js", "js/core/logger.js", "js/core/yt/buffer.js", "js/core/yt/content.js" ],
+      "matches": [ "https://www.youtube.com/*" ],
+      "run_at": "document_start",
+      "world": "MAIN"
+   }, {
+      "js": [ "js/utils.js", "js/core/logger.js", "js/core/content_script.js" ],
+      "matches": [ "https://music.youtube.com/*" ]
+   }, {
+      "js": [ "js/core/function.js", "js/core/logger.js", "js/core/ytm/content.js" ],
+      "matches": [ "https://music.youtube.com/*" ],
+      "world": "MAIN"
+   }, {
+      "css": [ "css/channel.css", "css/ads.css" ],
+      "matches": [ "https://www.youtube.com/*" ]
+   } ],
+   "default_locale": "en",
+   "description": "__MSG_brand_desc__",
+   "icons": {
+      "128": "assets/icon-120.png",
+      "16": "assets/icon-16.png",
+      "48": "assets/icon-48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgbddcdGrpUv5/TN2WsUP+DfyOOFqctmA4A+tHXZ3ywVwI2viWZg9I/nmYMbIT1e8ZaqZVWy6zmT4S8m/BmrfC8VIRWFLMvrNEpNalWiqsf6bcEkn9UNrfgUq6uI1mRQlLC2GH3YtZ6OXhM3CHO28fatx/Y6tQa/jK0i7HYTZvHGRbcB8Vq2eRAO6hjq1ymBP0vaJPaTEgs7F9gAh6O9l+chbpViWNGLOQeMn6lFoEF6dthN225Hr3KwcWMu7jZFxV4IlmCSEhEPQ7n8wcokZZHanAFiGfghYWPz6e7rp4a71s0SoTXpsRFZTlQaukYzHRv6YOXrVbj2dGHZDGIBELQIDAQAB",
+   "manifest_version": 3,
+   "name": "__MSG_brand__",
+   "permissions": [ "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "4.3",
+   "web_accessible_resources": [ {
+      "matches": [ "https://www.youtube.com/*" ],
+      "resources": [ "assets/*.png" ]
+   } ]
+}

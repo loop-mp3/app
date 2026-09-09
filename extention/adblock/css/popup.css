@@ -1,0 +1,115 @@
+body,
+html {
+  font-family: 'Arial', sans-serif;
+  background-color: #030303;
+  color: #f1f1f1;
+  text-align: center;
+}
+
+body {
+  width: 400px;
+}
+
+a {
+  color: #3ea6ff;
+}
+
+footer {
+  width: 100%;
+}
+
+.switch {
+  display: flex;
+  justify-content: center;
+}
+
+.page-holder {
+  margin: auto;
+  width: 50%;
+}
+
+.logo {
+  height: 30px;
+}
+
+button {
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button.success {
+  background-color: #4caf50;
+  color: white;
+}
+
+button.error {
+  background-color: #ff4d4d;
+  color: white;
+}
+
+textarea {
+  width: 80%;
+}
+
+.badge {
+  margin-top: 15px;
+}
+
+.message {
+  color: #ff4d4d;
+  -webkit-animation: breathing 2s ease-out infinite normal;
+  animation: breathing 2s ease-out infinite normal;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+}
+
+@-webkit-keyframes breathing {
+  0% {
+    -webkit-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+
+  25% {
+    -webkit-transform: scale(1);
+    transform: scale(1);
+  }
+
+  60% {
+    -webkit-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+
+  100% {
+    -webkit-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+}
+
+@keyframes breathing {
+  0% {
+    -webkit-transform: scale(0.9);
+    -ms-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+
+  25% {
+    -webkit-transform: scale(1);
+    -ms-transform: scale(1);
+    transform: scale(1);
+  }
+
+  60% {
+    -webkit-transform: scale(0.9);
+    -ms-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+
+  100% {
+    -webkit-transform: scale(0.9);
+    -ms-transform: scale(0.9);
+    transform: scale(0.9);
+  }
+}
