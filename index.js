@@ -9,7 +9,7 @@ function createWindow() {
             preload: path.join(__dirname, "preload.js")
         }
     });
-
+    win.removeMenu();
     win.loadURL("https://music.youtube.com/");
 }
 
