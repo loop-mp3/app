@@ -1,0 +1,36 @@
+name: Sync Extension
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout loop extension
+        uses: actions/checkout@v4
+        with:
+          repository: YOUR_USERNAME/loop
+          path: extension/loop
+
+      - name: Remove nested git metadata
+        run: rm -rf extension/loop/.git
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add extension/loop
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "chore: sync Loop extension"
+            git push
+          fi
