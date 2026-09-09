@@ -1,7 +1,7 @@
 # loop/app
 
 > [!WARNING]
-> The extention used for adblocking is [JadSkip](https://github.com/JC-comp/JAdSkip.git) owned by [JC-comp](https://https://jcomp.tk/)
+> The extention used for adblocking is a modifed version [JadSkip](https://github.com/JC-comp/JAdSkip.git) owned by [JC-comp](https://https://jcomp.tk/)
 
 The Electron desktop app for [loop](https://loop.mizucode.qzz.io). It opens YouTube Music and loads the Loop extension as part of the app shell.
 
