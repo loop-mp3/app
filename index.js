@@ -70,8 +70,8 @@ async function createWindow() {
     await loadExtensions();
 
     const win = new BrowserWindow({
-        width: 900,
-        height: 600,
+        width: 1100,
+        height: 750,
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false
