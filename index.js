@@ -3,7 +3,10 @@ const path = require("path");
 const fs = require("fs");
 const DiscordRPC = require("discord-rpc");
 
-const EXTENSIONS_DIR = path.join(__dirname, "extention");
+const EXTENSIONS_DIR = app.isPackaged
+    ? path.join(process.resourcesPath, "extention")
+    : path.join(__dirname, "extention");
+const ICON_PATH = path.join(__dirname, "assets", "icon.ico");
 const YT_URL = "https://music.youtube.com/";
 const DISCORD_CLIENT_ID = "1547617300230701156";
 const LOOP_URL = "https://loop.mizucode.qzz.io/";
@@ -72,7 +75,7 @@ ipcMain.on("discord-rpc:update", (_event, activity) => {
     lastActivity = {
         type: 2,
         details: (songTitle ? `Listening to ${songTitle}` : String(activity.details || "Listening to Loop")).slice(0, 128),
-        state: "",
+        state: undefined,
         largeImageKey: String(activity.largeImageKey || "").slice(0, 300),
         largeImageText: String(activity.largeImageText || "Loop").slice(0, 128),
         buttons: [{ label: "Get Loop", url: LOOP_URL }],
@@ -152,6 +155,7 @@ async function createWindow() {
     const win = new BrowserWindow({
         width: 1100,
         height: 750,
+        icon: ICON_PATH,
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,

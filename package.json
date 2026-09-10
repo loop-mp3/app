@@ -17,6 +17,32 @@
     "clean": "rimraf dist",
     "rebuild": "electron-rebuild"
   },
+  "build": {
+    "appId": "com.loop.app",
+    "productName": "Loop",
+    "directories": {
+      "output": "../loop-app-build"
+    },
+    "files": [
+      "**/*",
+      "!loop-app-build{,/**/*}",
+      "!dist{,/**/*}",
+      "!extention{,/**/*}"
+    ],
+    "extraResources": [
+      {
+        "from": "extention",
+        "to": "extention"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/loop-mp3/app.git"
@@ -30,7 +56,8 @@
   },
   "homepage": "https://github.com/loop-mp3/app#readme",
   "devDependencies": {
-    "electron": "^44.3.0"
+    "electron": "^44.3.0",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "discord-rpc": "^4.0.1"
