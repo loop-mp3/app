@@ -68,10 +68,11 @@ function clearDiscordActivity() {
 
 ipcMain.on("discord-rpc:update", (_event, activity) => {
     if (!activity || typeof activity !== "object") return;
+    const songTitle = String(activity.state || "").trim();
     lastActivity = {
         type: 2,
-        details: String(activity.details || "Listening to Loop").slice(0, 128),
-        state: String(activity.state || "").slice(0, 128),
+        details: (songTitle ? `Listening to ${songTitle}` : String(activity.details || "Listening to Loop")).slice(0, 128),
+        state: "",
         largeImageKey: String(activity.largeImageKey || "").slice(0, 300),
         largeImageText: String(activity.largeImageText || "Loop").slice(0, 128),
         buttons: [{ label: "Get Loop", url: LOOP_URL }],
