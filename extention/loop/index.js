@@ -19,6 +19,44 @@ function getVinylArtwork(trackId) {
     return trackId ? `https://img.youtube.com/vi/${trackId}/maxresdefault.jpg` : getFallbackArtwork();
 }
 
+const LOOP_DISCORD_URL = "https://loop.mizucode.qzz.io/";
+let lastDiscordUpdate = 0;
+let lastDiscordSignature = "";
+
+function publishDiscordActivity({ force = false } = {}) {
+    const loop = document.getElementById("loop");
+    const media = getCurrentMedia();
+    if (!loop || loop.classList.contains("loop-empty") || !media) {
+        window.postMessage({ source: "loop.mp3", type: "discord-rpc:clear" }, "*");
+        return;
+    }
+
+    const title = loop.querySelector("#loop-track-title")?.textContent.trim() || "Unknown title";
+    const artist = loop.querySelector("#loop-track-artist")?.textContent.trim() || "Unknown artist";
+    const album = loop.querySelector("#loop-track-album")?.textContent.trim() || "Unknown album";
+    const artwork = loop.querySelector("#loop-artwork")?.src || "";
+    const duration = Number(media.duration);
+    const position = Number(media.currentTime);
+    const now = Date.now();
+    const signature = `${title}|${artist}|${album}|${artwork}|${media.paused}|${Math.floor(position)}`;
+    if (!force && now - lastDiscordUpdate < 1000 && signature === lastDiscordSignature) return;
+    lastDiscordUpdate = now;
+    lastDiscordSignature = signature;
+
+    const activity = {
+        details: "Listening to Loop",
+        state: `${title} by ${artist}`,
+        largeImageKey: artwork,
+        largeImageText: `${title} — ${artist}`,
+    };
+    if (Number.isFinite(duration) && duration > 0 && !media.paused) {
+        const start = now - Math.floor(position * 1000);
+        activity.startTimestamp = start;
+        activity.endTimestamp = start + Math.floor(duration * 1000);
+    }
+    window.postMessage({ source: "loop.mp3", type: "discord-rpc:update", activity }, "*");
+}
+
 function loadFontAwesome() {
     if (document.querySelector('link[data-loop-font-awesome="true"]')) return;
     const mountPoint = document.head || document.documentElement;
@@ -555,6 +593,7 @@ function updateLoop(artworkURL, trackInfo) {
     syncTrackFeedbackState();
     updateKawarpArtwork(artwork.src);
     updatePlaybackControls(getCurrentMedia());
+    publishDiscordActivity({ force: true });
 }
 
 let recordFrame;
@@ -590,6 +629,7 @@ function updatePlaybackControls(media = getCurrentMedia()) {
         seek.max = "0";
         currentTime.textContent = "0:00";
         duration.textContent = "0:00";
+        publishDiscordActivity({ force: true });
         return;
     }
 
@@ -601,6 +641,7 @@ function updatePlaybackControls(media = getCurrentMedia()) {
     seek.value = Number.isFinite(media.currentTime) ? String(media.currentTime) : "0";
     currentTime.textContent = formatTime(media.currentTime);
     duration.textContent = formatTime(media.duration);
+    publishDiscordActivity();
 }
 
 function togglePlayback() {
