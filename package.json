@@ -8,16 +8,15 @@
     "dev": "electron . --enable-logging",
     "build": "electron-builder",
     "dist": "electron-builder",
-      "pack": "electron-builder --dir",
-      "lint": "eslint .",
-      "format": "prettier --write .",
-      "format:check": "prettier --check .",
-      "test": "jest",
-      "test:watch": "jest --watch",
-      "clean": "rimraf dist",
-      "rebuild": "electron-rebuild"
-    },
-
+    "pack": "electron-builder --dir",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "clean": "rimraf dist",
+    "rebuild": "electron-rebuild"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/loop-mp3/app.git"
@@ -32,5 +31,8 @@
   "homepage": "https://github.com/loop-mp3/app#readme",
   "devDependencies": {
     "electron": "^44.3.0"
+  },
+  "dependencies": {
+    "discord-rpc": "^4.0.1"
   }
 }
