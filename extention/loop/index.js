@@ -355,9 +355,22 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
     }
 }
 
+function syncWindowTitle() {
+    const loop = document.getElementById("loop");
+    if (!loop || loop.classList.contains("loop-empty")) {
+        document.title = "loop";
+        return;
+    }
+
+    const title = loop.querySelector("#loop-track-title")?.textContent.trim();
+    const artist = loop.querySelector("#loop-track-artist")?.textContent.trim();
+    document.title = title && artist ? `Loop | ${title} by ${artist}` : "loop";
+}
+
 function goBackToNormal() {
     if (!getCurrentTrackId()) emptyScreenDismissed = true;
     restoreYTMSearch();
+    document.title = "loop";
     console.log("[loop.mp3] Loop removed, back to normal YTM");
 }
 
@@ -527,6 +540,7 @@ function updateLoop(artworkURL, trackInfo) {
     album.textContent = trackInfo.album;
     loop.classList.toggle("loop-empty", Boolean(trackInfo.empty));
     emptyState.hidden = !trackInfo.empty;
+    syncWindowTitle();
     syncTrackFeedbackState();
     updateKawarpArtwork(artwork.src);
     updatePlaybackControls(getCurrentMedia());
@@ -715,6 +729,7 @@ async function updateForCurrentTrack(playerBar) {
         if (albumNode && albumNode.textContent === "Unknown album" && liveInfo.album !== "Unknown album") {
             albumNode.textContent = liveInfo.album;
         }
+        syncWindowTitle();
 
         // YouTube Music updates its feedback controls asynchronously after a
         // track change. Keep retrying while the track is current so the dock
@@ -801,6 +816,7 @@ function restoreYTMSearch() {
     restoreLoopQueue();
 
     document.getElementById("loop")?.remove();
+    document.title = "loop";
     originalSearchParent = undefined;
     originalSearchNextSibling = undefined;
     originalSearchResultsParent = undefined;
@@ -1125,6 +1141,7 @@ document.addEventListener("keydown", (event) => {
 
 function init(playerBar) {
     console.log("[loop.mp3] YTM is ready", playerBar);
+    document.title = "loop";
     warnIfNotSignedIn();
     updateForCurrentTrack(playerBar);
     setInterval(() => {
