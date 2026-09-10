@@ -389,7 +389,7 @@ function updateLoop(artworkURL, trackInfo) {
                     <div><kbd>M</kbd> Mute / unmute</div>
                     <div><kbd>K</kbd> Previous track</div>
                     <div><kbd>J</kbd> Next track</div>
-                    <div><kbd>Ctrl + M</kbd> Search</div>
+                    <div><kbd>Ctrl + K</kbd> Search</div>
                     <div><kbd>Ctrl + Q</kbd> See queue</div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
                     <label class="loop-navigation-toggle">
@@ -408,7 +408,7 @@ function updateLoop(artworkURL, trackInfo) {
                 <div id="loop-empty-state" hidden>
                     <div class="loop-empty-title">Nothing is playing</div>
                     <div class="loop-empty-subtitle">Search something to play</div>
-                    <kbd>Ctrl + M</kbd>
+                    <kbd>Ctrl + K</kbd>
                 </div>
                 <div id="loop-inline-buttons" aria-label="Playback controls">
                     <button id="loop-previous-button" type="button" aria-label="Previous track" hidden>&#9198;</button>
@@ -464,7 +464,7 @@ function updateLoop(artworkURL, trackInfo) {
             sendLoopShortcut("q", { ctrlKey: true });
         });
         loop.querySelector("#loop-search-button").addEventListener("click", () => {
-            sendLoopShortcut("m", { ctrlKey: true });
+            sendLoopShortcut("k", { ctrlKey: true });
         });
         loop.querySelector("#loop-vinyl-toggle").addEventListener("change", (event) => {
             loopPreferences.hideVinyl = event.target.checked;
