@@ -19,7 +19,7 @@ jobs:
 
       - name: Remove the existing extension submodule entry
         run: |
-          git rm --cached --ignore-unmatch extention/loop
+          git rm -r --cached --ignore-unmatch extention/loop
           rm -rf extention/loop
 
       - name: Checkout loop extension
