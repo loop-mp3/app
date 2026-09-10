@@ -19,25 +19,31 @@ function getVinylArtwork(trackId) {
     return trackId ? `https://img.youtube.com/vi/${trackId}/maxresdefault.jpg` : getFallbackArtwork();
 }
 
-const LOOP_DISCORD_URL = "https://loop.mizucode.qzz.io/";
 let lastDiscordUpdate = 0;
 let lastDiscordSignature = "";
 
 function publishDiscordActivity({ force = false } = {}) {
     const loop = document.getElementById("loop");
     const media = getCurrentMedia();
-    if (!loop || loop.classList.contains("loop-empty") || !media) {
-        window.postMessage({ source: "loop.mp3", type: "discord-rpc:clear" }, "*");
+    const title = loop?.querySelector("#loop-track-title")?.textContent.trim() || "";
+    const artist = loop?.querySelector("#loop-track-artist")?.textContent.trim() || "";
+    const album = loop?.querySelector("#loop-track-album")?.textContent.trim() || "";
+    const artwork = loop?.querySelector("#loop-artwork")?.src || "";
+    const now = Date.now();
+
+    if (!loop || loop.classList.contains("loop-empty") || !title || !artist || !media) {
+        if (!force && now - lastDiscordUpdate < 1000 && lastDiscordSignature === "clear") return;
+        lastDiscordUpdate = now;
+        lastDiscordSignature = "clear";
+        window.postMessage({
+            source: "loop.mp3",
+            type: "discord-rpc:clear",
+        }, "*");
         return;
     }
 
-    const title = loop.querySelector("#loop-track-title")?.textContent.trim() || "Unknown title";
-    const artist = loop.querySelector("#loop-track-artist")?.textContent.trim() || "Unknown artist";
-    const album = loop.querySelector("#loop-track-album")?.textContent.trim() || "Unknown album";
-    const artwork = loop.querySelector("#loop-artwork")?.src || "";
     const duration = Number(media.duration);
     const position = Number(media.currentTime);
-    const now = Date.now();
     const signature = `${title}|${artist}|${album}|${artwork}|${media.paused}|${Math.floor(position)}`;
     if (!force && now - lastDiscordUpdate < 1000 && signature === lastDiscordSignature) return;
     lastDiscordUpdate = now;
@@ -49,12 +55,17 @@ function publishDiscordActivity({ force = false } = {}) {
         largeImageKey: artwork,
         largeImageText: `${title} — ${artist}`,
     };
-    if (Number.isFinite(duration) && duration > 0 && !media.paused) {
-        const start = now - Math.floor(position * 1000);
-        activity.startTimestamp = start;
-        activity.endTimestamp = start + Math.floor(duration * 1000);
+    if (!media.paused && Number.isFinite(duration) && duration > 0) {
+        const startTimestamp = now - Math.floor(position * 1000);
+        activity.startTimestamp = startTimestamp;
+        activity.endTimestamp = startTimestamp + Math.floor(duration * 1000);
     }
-    window.postMessage({ source: "loop.mp3", type: "discord-rpc:update", activity }, "*");
+
+    window.postMessage({
+        source: "loop.mp3",
+        type: "discord-rpc:update",
+        activity,
+    }, "*");
 }
 
 function loadFontAwesome() {
@@ -716,9 +727,7 @@ function updatePlaybackControls(media = getCurrentMedia()) {
     const currentTime = document.querySelector("#loop-current-time");
     const duration = document.querySelector("#loop-duration");
 
-    if (!playButton || !muteButton || !seek || !currentTime || !duration) return;
-
-    if (!media) {
+    if (playButton && muteButton && seek && currentTime && duration && !media) {
         playButton.textContent = "▶";
         playButton.setAttribute("aria-label", "Play");
         muteButton.textContent = "🔊";
@@ -727,18 +736,16 @@ function updatePlaybackControls(media = getCurrentMedia()) {
         seek.max = "0";
         currentTime.textContent = "0:00";
         duration.textContent = "0:00";
-        publishDiscordActivity({ force: true });
-        return;
+    } else if (playButton && muteButton && seek && currentTime && duration && media) {
+        playButton.textContent = media.paused ? "▶" : "⏸";
+        playButton.setAttribute("aria-label", media.paused ? "Play" : "Pause");
+        muteButton.textContent = media.muted ? "♩" : "♪";
+        muteButton.setAttribute("aria-label", media.muted ? "Unmute" : "Mute");
+        seek.max = Number.isFinite(media.duration) ? String(media.duration) : "0";
+        seek.value = Number.isFinite(media.currentTime) ? String(media.currentTime) : "0";
+        currentTime.textContent = formatTime(media.currentTime);
+        duration.textContent = formatTime(media.duration);
     }
-
-    playButton.textContent = media.paused ? "▶" : "⏸";
-    playButton.setAttribute("aria-label", media.paused ? "Play" : "Pause");
-    muteButton.textContent = media.muted ? "♩" : "♪";
-    muteButton.setAttribute("aria-label", media.muted ? "Unmute" : "Mute");
-    seek.max = Number.isFinite(media.duration) ? String(media.duration) : "0";
-    seek.value = Number.isFinite(media.currentTime) ? String(media.currentTime) : "0";
-    currentTime.textContent = formatTime(media.currentTime);
-    duration.textContent = formatTime(media.duration);
     publishDiscordActivity();
 }
 
