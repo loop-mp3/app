@@ -153,8 +153,8 @@ async function createWindow() {
     await loadExtensions();
 
     const win = new BrowserWindow({
-        width: 1100,
-        height: 750,
+        width: 1000,
+        height: 700,
         icon: ICON_PATH,
         webPreferences: {
             contextIsolation: true,
