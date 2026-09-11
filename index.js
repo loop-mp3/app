@@ -9,7 +9,7 @@ const EXTENSIONS_DIR = app.isPackaged
 const ICON_PATH = path.join(__dirname, "assets", "icon.ico");
 const YT_URL = "https://music.youtube.com/";
 const DISCORD_CLIENT_ID = "1547617300230701156";
-const LOOP_URL = "https://loop.mizucode.qzz.io/";
+const LOOP_URL = "https://loop.mizucode.qzz.io";
 
 let discordClient;
 let discordReady = false;
