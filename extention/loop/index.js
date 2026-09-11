@@ -141,6 +141,7 @@ let kawarpEnabled = true;
 let loopPreferences = {
     animatedBackground: true,
     hideVinyl: true,
+    theme: "default",
 };
 let kawarpRendererClass;
 let kawarpRendererPromise;
@@ -221,6 +222,31 @@ function showRequiredUpdateBlocker(config) {
     (document.body || document.documentElement).appendChild(blocker);
 }
 
+function getInstalledVersion() {
+    try {
+        const runtime = globalThis.chrome?.runtime || globalThis.browser?.runtime;
+        return runtime?.getManifest?.().version || "0.0.0";
+    } catch {
+        return "0.0.0";
+    }
+}
+
+function compareVersions(left, right) {
+    const parse = (version) => String(version).split(".").map((part) => {
+        const match = part.match(/^\d+/);
+        return match ? Number(match[0]) : 0;
+    });
+    const leftParts = parse(left);
+    const rightParts = parse(right);
+    const length = Math.max(leftParts.length, rightParts.length);
+
+    for (let index = 0; index < length; index += 1) {
+        const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
+        if (difference !== 0) return difference > 0 ? 1 : -1;
+    }
+    return 0;
+}
+
 async function checkForUpdates() {
     try {
         const response = await fetch("https://loop.mizucode.qzz.io/config.json", {
@@ -231,14 +257,20 @@ async function checkForUpdates() {
         const config = await response.json();
         if (!config || typeof config !== "object") return false;
 
+        // A notice is only meaningful when the server advertises a newer
+        // version. This prevents arbitrary update_notice text from becoming
+        // a false alert while the installed version is already current.
+        if (!config.version || compareVersions(config.version, getInstalledVersion()) <= 0) {
+            return false;
+        }
+
         const updateRequired = Number(config.is_update_required) === 1;
         if (updateRequired) {
             showRequiredUpdateBlocker(config);
             loopUpdateBlocked = true;
             return true;
         }
-        // A flag value of 0 means the extension remains usable and the
-        // server-provided update notice should be shown.
+
         return config;
     } catch (error) {
         console.warn("[loop.mp3] update check failed:", error);
@@ -278,9 +310,23 @@ function saveLoopPreferences() {
 function applyLoopPreferences() {
     const loop = document.querySelector("#loop");
     if (!loop) return;
+    applyLoopTheme();
     loop.classList.toggle("loop-no-vinyl", loopPreferences.hideVinyl);
     const vinylToggle = loop.querySelector("#loop-vinyl-toggle");
     if (vinylToggle) vinylToggle.checked = loopPreferences.hideVinyl;
+}
+
+function applyLoopTheme() {
+    const loop = document.querySelector("#loop");
+    if (!loop) return;
+
+    const supportedThemes = new Set(["default", "sharp", "catppuccin"]);
+    const theme = supportedThemes.has(loopPreferences.theme) ? loopPreferences.theme : "default";
+    loopPreferences.theme = theme;
+    loop.dataset.theme = theme;
+
+    const themeSelect = loop.querySelector("#loop-theme-select");
+    if (themeSelect) themeSelect.value = theme;
 }
 
 function showAuthWarningPopup() {
@@ -540,10 +586,19 @@ function updateLoop(artworkURL, trackInfo) {
         loop.innerHTML = `
             <div id="loop-player">
                 <button id="loop-back-button" type="button" aria-label="Return to YouTube Music">&#215;</button>
-                <button id="loop-shortcuts-button" type="button" aria-label="Show keyboard shortcuts">?</button>
+                <button id="loop-shortcuts-button" type="button" aria-label="Open Loop menu" title="Loop menu">?</button>
                 <canvas id="loop-kawarp-background" aria-hidden="true"></canvas>
                 <div id="loop-shortcuts-panel" hidden>
-                    <div class="loop-shortcuts-title">Loop shortcuts</div>
+                    <div class="loop-shortcuts-title">Loop menu</div>
+                    <label class="loop-theme-picker">
+                        <span>Theme</span>
+                        <select id="loop-theme-select" aria-label="Choose a Loop theme">
+                            <option value="default">Default</option>
+                            <option value="sharp">Monochrome</option>
+                            <option value="catppuccin">Catppuccin</option>
+                        </select>
+                    </label>
+                    <div class="loop-shortcuts-heading">Shortcuts</div>
                     <div><kbd>M</kbd> Mute / unmute</div>
                     <div><kbd>K</kbd> Previous track</div>
                     <div><kbd>J</kbd> Next track</div>
@@ -628,6 +683,11 @@ function updateLoop(artworkURL, trackInfo) {
             loopPreferences.hideVinyl = event.target.checked;
             saveLoopPreferences();
             applyLoopPreferences();
+        });
+        loop.querySelector("#loop-theme-select").addEventListener("change", (event) => {
+            loopPreferences.theme = event.target.value;
+            saveLoopPreferences();
+            applyLoopTheme();
         });
         loop.querySelector("#loop-shortcuts-button").addEventListener("click", (event) => {
             event.stopPropagation();
