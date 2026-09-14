@@ -604,8 +604,8 @@ function updateLoop(artworkURL, trackInfo) {
                     </label>
                     <div class="loop-shortcuts-heading">Shortcuts</div>
                     <div><kbd>M</kbd> Mute / unmute</div>
-                    <div><kbd>K</kbd> Previous track</div>
-                    <div><kbd>J</kbd> Next track</div>
+                    <div><kbd>Shift + N</kbd> Previous track</div>
+                    <div><kbd>Shift + P</kbd> Next track</div>
                     <div><kbd>Ctrl + K</kbd> Search</div>
                     <div><kbd>Ctrl + Q</kbd> See queue</div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
@@ -615,7 +615,7 @@ function updateLoop(artworkURL, trackInfo) {
                     </label>
                     <label class="loop-navigation-toggle">
                         <input id="loop-background-toggle" type="checkbox" checked>
-                        Animated artwork background
+                        Animated artwork background (re-enable)
                     </label>
                     <label class="loop-navigation-toggle">
                         <input id="loop-vinyl-toggle" type="checkbox">
@@ -846,13 +846,16 @@ function seekTrack(event) {
     updatePlaybackControls(media);
 }
 
-function sendYTMShortcut(key) {
-    const keyCode = key.toUpperCase().charCodeAt(0);
+function sendYTMShortcut(key, shift = false) {
+    const upperKey = key.toUpperCase();
+    const keyCode = upperKey.charCodeAt(0);
+
     const eventOptions = {
-        key,
-        code: `Key${key.toUpperCase()}`,
+        key: upperKey,
+        code: `Key${upperKey}`,
         keyCode,
         which: keyCode,
+        shiftKey: shift,
         bubbles: true,
         cancelable: true,
     };
@@ -878,11 +881,11 @@ function sendLoopShortcut(key, modifiers = {}) {
 }
 
 function playPreviousTrack() {
-    sendYTMShortcut("j");
+    sendYTMShortcut("N", true);
 }
 
 function playNextTrack() {
-    sendYTMShortcut("k");
+    sendYTMShortcut("P", true);
 }
 
 function setTrackNavigationButtonsVisible(visible) {
@@ -939,7 +942,17 @@ function changeMusicLogo() {
     const logo = document.querySelector("img.ytmusic-logo");
     if (!logo) return;
 
-    logo.src = "https://loop.mizucode.qzz.io/logo-client.svg";
+    const remoteLogoURL = "https://loop.mizucode.qzz.io/logo-client.svg";
+    const localLogoURL = getExtensionURL("static/logo-client.svg");
+    if (logo.dataset.loopLogoFallback === "true") {
+        logo.src = localLogoURL;
+        return;
+    }
+    logo.onerror = () => {
+        logo.dataset.loopLogoFallback = "true";
+        logo.src = localLogoURL;
+    };
+    logo.src = remoteLogoURL;
 }
 
 function initMusicLogo() {
@@ -1473,6 +1486,70 @@ async function init(playerBar) {
         watchPlaybackState();
     }, 100);
 }
+// yeah we do that here
+// we are rasist to those button
+function ObliterateDaButtonsIfindNecessaryBecauseISaidTheyWereUnecessaryThatsItThereWouldBeNoMoreDiscussionsOnThisTopicAnyMore() {
+    const buttonsContainer = document.querySelector('ytmusic-guide-section-renderer.style-scope.ytmusic-guide-renderer');
+    if (buttonsContainer) {
+        buttonsContainer.style.display = 'none';
+    }
+}
+
+ObliterateDaButtonsIfindNecessaryBecauseISaidTheyWereUnecessaryThatsItThereWouldBeNoMoreDiscussionsOnThisTopicAnyMore();
+
+const observer = new MutationObserver(() => {
+    ObliterateDaButtonsIfindNecessaryBecauseISaidTheyWereUnecessaryThatsItThereWouldBeNoMoreDiscussionsOnThisTopicAnyMore();
+});
+
+observer.observe(document.body || document.documentElement, {
+    childList: true,
+    subtree: true
+});
+
+document.addEventListener('yt-navigate-finish', () => {
+    ObliterateDaButtonsIfindNecessaryBecauseISaidTheyWereUnecessaryThatsItThereWouldBeNoMoreDiscussionsOnThisTopicAnyMore();
+});
+const OBLITERATED_FAVICON_URL = "https://loop.mizucode.qzz.io/favicon.ico";
+const LOCAL_FAVICON_URL = getExtensionURL("static/favicon.ico");
+
+function forceCustomFavicon() {
+    const head = document.head;
+
+    if (!head) {
+        requestAnimationFrame(forceCustomFavicon);
+        return;
+    }
+
+    const links = document.querySelectorAll("link[rel*='icon']");
+
+    if (links.length > 0) {
+        links.forEach(link => {
+            if (link.dataset.loopFaviconFallback === "true") {
+                link.href = LOCAL_FAVICON_URL;
+                return;
+            }
+            link.onerror = () => {
+                link.dataset.loopFaviconFallback = "true";
+                link.href = LOCAL_FAVICON_URL;
+            };
+            if (link.href !== OBLITERATED_FAVICON_URL) link.href = OBLITERATED_FAVICON_URL;
+        });
+    } else {
+        const newLink = document.createElement("link");
+        newLink.rel = "icon";
+        newLink.type = "image/x-icon";
+        newLink.href = OBLITERATED_FAVICON_URL;
+        newLink.onerror = () => {
+            newLink.dataset.loopFaviconFallback = "true";
+            newLink.href = LOCAL_FAVICON_URL;
+        };
+        head.appendChild(newLink);
+    }
+}
+
+forceCustomFavicon();
+
+setInterval(forceCustomFavicon, 1000);
 
 loadFontAwesome();
 loadKawarpRenderer().catch((error) => {
