@@ -78,7 +78,7 @@ ipcMain.on("discord-rpc:update", (_event, activity) => {
         state: undefined,
         largeImageKey: String(activity.largeImageKey || "").slice(0, 300),
         largeImageText: String(activity.largeImageText || "Loop").slice(0, 128),
-        buttons: [{ label: "Get Loop", url: LOOP_URL }],
+        buttons: [{ label: "Get Loop", url: "https://loop.mizucode.qzz.io/" }],
         instance: false,
     };
     if (Number.isFinite(activity.startTimestamp)) lastActivity.startTimestamp = activity.startTimestamp;
