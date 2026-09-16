@@ -2,6 +2,7 @@ const { app, BrowserWindow, session, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const DiscordRPC = require("discord-rpc");
+const { execFile } = require("child_process");
 
 const EXTENSIONS_DIR = app.isPackaged
     ? path.join(process.resourcesPath, "extention")
@@ -63,11 +64,41 @@ function startDiscordRPC() {
         console.warn("[discord] Start Discord to enable Rich Presence:", error.message);
     });
 }
+// we dont need you now cuh
+// function DisableScreen() {}
 
 function clearDiscordActivity() {
     lastActivity = undefined;
     if (discordReady) discordClient.clearActivity().catch(() => {});
 }
+
+ipcMain.on("loop:screen-off", () => {
+    if (process.platform !== "win32") {
+        console.warn("[screen] Screen disable is only supported on Windows.");
+        return;
+    }
+
+    execFile(
+        "powershell.exe",
+        [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "(Add-Type '[DllImport(\"user32.dll\")]public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name a -PassThru)::SendMessage(-1,0x0112,0xF170,2)"
+        ],
+        {
+            windowsHide: true
+        },
+        (error) => {
+            if (error) {
+                console.warn("[screen] Failed to disable screen:", error.message);
+                return;
+            }
+
+            console.log("[screen] Display disabled");
+        }
+    );
+});
 
 ipcMain.on("discord-rpc:update", (_event, activity) => {
     if (!activity || typeof activity !== "object") return;

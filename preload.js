@@ -9,6 +9,8 @@ window.addEventListener("message", (event) => {
         ipcRenderer.send("discord-rpc:update", event.data.activity);
     } else if (event.data.type === "discord-rpc:clear") {
         ipcRenderer.send("discord-rpc:clear");
+    } else if (event.data.type === "loop:screen-off") {
+        ipcRenderer.send("loop:screen-off")
     }
 });
 
