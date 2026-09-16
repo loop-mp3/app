@@ -43,5 +43,6 @@ jobs:
             echo "No changes."
           else
             git commit -m "chore: sync Loop extension"
+            git pull --rebase origin main            
             git push origin HEAD:main
           fi
