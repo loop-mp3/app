@@ -82,9 +82,8 @@ ipcMain.on("loop:screen-off", () => {
         "powershell.exe",
         [
             "-NoProfile",
-            "-NonInteractive",
             "-Command",
-            "(Add-Type '[DllImport(\"user32.dll\")]public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name a -PassThru)::SendMessage(-1,0x0112,0xF170,2)"
+            "Start-Process -FilePath 'C:\\Windows\\System32\\scrnsave.scr' -ArgumentList '/s'"
         ],
         {
             windowsHide: true
@@ -99,6 +98,7 @@ ipcMain.on("loop:screen-off", () => {
         }
     );
 });
+
 
 ipcMain.on("discord-rpc:update", (_event, activity) => {
     if (!activity || typeof activity !== "object") return;
