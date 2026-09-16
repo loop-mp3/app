@@ -605,11 +605,13 @@ function updateLoop(artworkURL, trackInfo) {
                     </label>
                     <div class="loop-shortcuts-heading">Shortcuts</div>
                     <div><kbd>M</kbd> Mute / unmute</div>
-                    <div><kbd>Shift + P</kbd> Previous track</div>
-                    <div><kbd>Shift + N</kbd> Next track</div>
+                    <div><kbd>Shift + P / K</kbd> Previous track</div>
+                    <div><kbd>Shift + N / J</kbd> Next track</div>
+                    <div><kbd>H / Shift + ←</kbd> 10 Second backward</div>
+                    <div><kbd>L / Shift + →</kbd> 10 Second forward</div>
                     <div><kbd>Ctrl + K</kbd> Search</div>
                     <div><kbd>Ctrl + Q</kbd> See queue</div>
-                    <div><kbd>Ctrl + Alt + L</kbd> Turn off screen <span>(with loop running)</span></div>
+                    <div><kbd>Alt + L</kbd> Turn off screen <span>(with loop running)</span></div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
                     <label class="loop-navigation-toggle">
                         <input id="loop-navigation-toggle" type="checkbox">
@@ -662,6 +664,8 @@ function updateLoop(artworkURL, trackInfo) {
                         <i class="fa-solid fa-thumbs-down" aria-hidden="true"></i>
                     </button>
                     <button id="loop-screen-disable" type="button" aria-label="power off the screen while music playing" title="Turn off screen">
+                    <i class="fa-solid fa-power-off" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>`;
         document.body.appendChild(loop);
@@ -1421,7 +1425,7 @@ document.addEventListener("keydown", (event) => {
         return;
     }
 
-    if (event.ctrlKey && event.key === "k") {
+    if (event.altKey && event.key === "l") {
         console.log("[loop.mp3] triggered screen disable")
         DisableScreen()
     }
