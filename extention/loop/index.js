@@ -52,6 +52,7 @@ function publishDiscordActivity({ force = false } = {}) {
     const activity = {
         details: "Listening to Loop",
         state: title,
+        paused: media.paused,
         largeImageKey: artwork,
         largeImageText: artist,
     };

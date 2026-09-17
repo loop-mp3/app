@@ -106,7 +106,7 @@ ipcMain.on("discord-rpc:update", (_event, activity) => {
     lastActivity = {
         type: 2,
         details: (songTitle ? `${songTitle}` : String(activity.details || "Listening to Loop")).slice(0, 128),
-        state: undefined,
+        state: activity.paused ? "Paused" : undefined,
         largeImageKey: String(activity.largeImageKey || "").slice(0, 300),
         largeImageText: String(activity.largeImageText || "Loop").slice(0, 128),
         buttons: [{ label: "Get Loop", url: "https://loop.mizucode.qzz.io/" }],
