@@ -30,6 +30,20 @@ function getVinylArtwork(trackId) {
     return trackId ? `https://img.youtube.com/vi/${trackId}/maxresdefault.jpg` : getFallbackArtwork();
 }
 
+function getPlayerBarArtwork(playerBar) {
+    const artwork = [...(playerBar?.querySelectorAll("img") || [])].find((image) => {
+        const source = image.currentSrc || image.src || "";
+        return source && !source.includes("ytmusic-logo") && !source.includes("favicon");
+    });
+    return artwork?.currentSrc || artwork?.src || "";
+}
+
+function getCurrentArtwork(playerBar, trackId) {
+    return trackId
+        ? getVinylArtwork(trackId)
+        : getPlayerBarArtwork(playerBar) || currentArtworkURL || getFallbackArtwork();
+}
+
 let lastDiscordUpdate = 0;
 let lastDiscordSignature = "";
 
@@ -157,6 +171,7 @@ let notificationAnimationTimer;
 let notificationAnimationFrame;
 let authWarningShown = false;
 let loopUpdateBlocked = false;
+let loopVisible = false;
 
 const loopPreferencesKey = "loop.mp3.preferences";
 const defaultUpdateURL = "https://loop.mizucode.qzz.io/update";
@@ -398,6 +413,75 @@ function findYTMActionButton(action) {
         if (action === "like" && label.includes("dislike")) return false;
         return button.offsetParent !== null;
     });
+}
+
+function returnToLoopUI(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const playerBar = document.querySelector("ytmusic-player-bar");
+    const trackId = getCurrentTrackId(playerBar) || lastTrackId;
+    console.log("[loop.mp3] Open Loop button activated", {
+        hasPlayerBar: Boolean(playerBar),
+        trackId: trackId || null,
+    });
+    const trackInfo = playerBar ? getTrackInfo(playerBar) : {
+        title: "Nothing is playing",
+        artist: "Search something to play",
+        album: "",
+        empty: true,
+    };
+    hideLoopSearch();
+    updateLoop(getCurrentArtwork(playerBar, trackId), trackInfo);
+    syncRecordMotion();
+}
+
+let loopRecordEventsBound = false;
+
+function bindLoopRecordEvents() {
+    if (loopRecordEventsBound) return;
+    loopRecordEventsBound = true;
+
+    document.addEventListener("pointerdown", (event) => {
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("#loop-record-button");
+        if (!button) return;
+        button.dataset.loopPointerActivated = "true";
+        returnToLoopUI(event);
+    }, true);
+
+    document.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("#loop-record-button");
+        if (!button) return;
+        if (button.dataset.loopPointerActivated === "true") {
+            delete button.dataset.loopPointerActivated;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        returnToLoopUI(event);
+    }, true);
+}
+
+function ensureLoopRecordButton() {
+    const castButton = [...document.querySelectorAll("ytmusic-cast-button")].find((button) => {
+        const bounds = button.getBoundingClientRect();
+        return button.offsetParent !== null && bounds.width > 0 && bounds.height > 0;
+    });
+    if (!castButton) return;
+
+    let recordButton = document.getElementById("loop-record-button");
+    if (!recordButton) {
+        recordButton = document.createElement("button");
+        recordButton.id = "loop-record-button";
+        recordButton.type = "button";
+        recordButton.setAttribute("aria-label", "Open Loop");
+        recordButton.title = "Open Loop";
+        recordButton.innerHTML = '<i class="fa-solid fa-record-vinyl" aria-hidden="true"></i>';
+    }
+    castButton.insertAdjacentElement("beforebegin", recordButton);
 }
 
 function DisableScreen() {
@@ -669,6 +753,7 @@ function syncWindowTitle() {
 }
 
 function goBackToNormal() {
+    loopVisible = false;
     if (!getCurrentTrackId()) emptyScreenDismissed = true;
     restoreYTMSearch();
     document.title = "loop";
@@ -676,6 +761,7 @@ function goBackToNormal() {
 }
 
 function updateLoop(artworkURL, trackInfo) {
+    loopVisible = true;
     let loop = document.getElementById("loop");
     if (!loop) {
         loop = document.createElement("div");
@@ -709,6 +795,7 @@ function updateLoop(artworkURL, trackInfo) {
                     <div><kbd>Ctrl + K</kbd> Search</div>
                     <div><kbd>Ctrl + Q</kbd> See queue</div>
                     <div><kbd>Alt + L</kbd> Turn off screen <span>(with loop running)</span></div>
+                    <div><kbd>~</kbd> Toggle Loop</div>
                     <div><kbd>Ctrl + F5</kbd> Reload Loop Session</div>
                     <div><kbd>F5</kbd> Reload Resources</div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
@@ -1156,9 +1243,9 @@ function watchTrackChanges(playerBar) {
 
 async function updateForCurrentTrack(playerBar) {
     const currentPlayerBar = document.querySelector("ytmusic-player-bar") || playerBar;
-    const trackId = getCurrentTrackId(currentPlayerBar);
+    const trackId = getCurrentTrackId(currentPlayerBar) || lastTrackId;
     const liveTrackInfo = getTrackInfo(currentPlayerBar);
-    const artworkURL = getVinylArtwork(trackId);
+    const artworkURL = getCurrentArtwork(currentPlayerBar, trackId);
     const trackSignature = [
         trackId || "",
         liveTrackInfo.title,
@@ -1200,16 +1287,17 @@ async function updateForCurrentTrack(playerBar) {
     syncRecordMotion();
     const trackInfo = await getTrackInfoFromTrackId(trackId, currentPlayerBar);
     const activePlayerBar = document.querySelector("ytmusic-player-bar") || playerBar;
+    const activeTrackId = getCurrentTrackId(activePlayerBar) || lastTrackId;
     const currentInfo = getTrackInfo(activePlayerBar);
     const currentSignature = [
-        getCurrentTrackId(activePlayerBar) || "",
+        activeTrackId || "",
         currentInfo.title,
         currentInfo.artist,
         currentInfo.album,
-        getVinylArtwork(getCurrentTrackId(activePlayerBar)),
+        getCurrentArtwork(activePlayerBar, activeTrackId),
     ].join("|");
     if (requestId !== metadataRequest || trackSignature !== currentSignature) return;
-    updateLoop(getVinylArtwork(trackId), trackInfo);
+    updateLoop(artworkURL, trackInfo);
     syncRecordMotion();
     console.log("[loop.mp3] Current track metadata:", trackInfo);
 }
@@ -1582,6 +1670,16 @@ document.addEventListener("keydown", (event) => {
     // Ignore the synthetic J/K events generated for YouTube Music itself.
     if (!event.isTrusted) return;
 
+    if (event.key === "~" || (event.code === "Backquote" && event.shiftKey)) {
+        event.preventDefault();
+        if (loopVisible && document.getElementById("loop")) {
+            goBackToNormal();
+        } else {
+            returnToLoopUI(event);
+        }
+        return;
+    }
+
     const target = event.target;
     const isTyping = target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
@@ -1626,6 +1724,8 @@ async function init(playerBar) {
     console.log("[loop.mp3] YTM is ready", playerBar);
     document.title = "loop";
     warnIfNotSignedIn();
+    bindLoopRecordEvents();
+    ensureLoopRecordButton();
     watchTrackChanges(playerBar);
     // Do not make the first GUI render wait for the network update check.
     updateForCurrentTrack(playerBar);
@@ -1643,6 +1743,7 @@ async function init(playerBar) {
     });
     setInterval(() => {
         if (loopUpdateBlocked) return;
+        ensureLoopRecordButton();
         updateForCurrentTrack(playerBar);
         watchPlaybackState();
     }, 100);
