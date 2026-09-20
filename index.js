@@ -195,6 +195,17 @@ async function createWindow() {
     });
 
     win.removeMenu();
+    win.webContents.on("before-input-event", (event, input) => {
+        if (
+            input.type === "keyDown" &&
+            input.control &&
+            input.shift &&
+            input.key.toLowerCase() === "i"
+        ) {
+            event.preventDefault();
+            win.webContents.toggleDevTools();
+        }
+    });
     win.webContents.on("did-finish-load", () => {
         win.webContents.setZoomFactor(0.8);
     });
