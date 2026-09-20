@@ -7,7 +7,18 @@ function waitForYTM(callback) {
     check();
 }
 
-function getCurrentTrackId() {
+function getCurrentTrackId(playerBar) {
+    const playerTrackLink = playerBar?.querySelector(
+        'a[href*="watch?v="], a[href*="youtu.be/"]'
+    );
+    if (playerTrackLink) {
+        try {
+            const url = new URL(playerTrackLink.href, location.href);
+            const trackId = url.searchParams.get("v") || url.pathname.split("/").pop();
+            if (trackId) return trackId;
+        } catch {
+        }
+    }
     return new URL(location.href).searchParams.get("v");
 }
 
@@ -140,6 +151,10 @@ let loopPreferences = {
 let currentArtworkURL = "";
 let kawarpRendererClass;
 let kawarpRendererPromise;
+let kawarpWarningTimer;
+let notificationTimer;
+let notificationAnimationTimer;
+let notificationAnimationFrame;
 let authWarningShown = false;
 let loopUpdateBlocked = false;
 
@@ -448,7 +463,7 @@ function getExtensionURL(path) {
 
 function loadKawarpRenderer() {
     if (!kawarpRendererPromise) {
-        kawarpRendererPromise = import(getExtensionURL("static/kawarp.js"))
+        kawarpRendererPromise = import(getExtensionURL("modules/kawarp.js"))
             .then(({ Kawarp }) => {
                 kawarpRendererClass = Kawarp;
                 return Kawarp;
@@ -505,6 +520,60 @@ function setKawarpEnabled(enabled) {
     loopPreferences.animatedBackground = enabled;
     saveLoopPreferences();
     setKawarpCanvasVisibility(enabled);
+    if (enabled) showKawarpWarning();
+}
+
+function showKawarpWarning() {
+    const warning = document.querySelector("#loop-kawarp-warning");
+    if (!warning) return;
+
+    window.clearTimeout(kawarpWarningTimer);
+    warning.hidden = false;
+    kawarpWarningTimer = window.setTimeout(() => {
+        warning.hidden = true;
+    }, 6000);
+    showLoopNotification(
+        "Kawarp enabled: higher GPU usage may reduce battery life.",
+        6000
+    );
+}
+
+function showLoopNotification(message, duration = 6000) {
+    const toast = document.querySelector("#loop-kawarp-toast");
+    const messageNode = toast?.querySelector(".loop-notification-message");
+    const progress = toast?.querySelector(".loop-notification-progress");
+    const closeButton = toast?.querySelector(".loop-notification-close");
+    if (!toast || !messageNode || !progress || !closeButton) return;
+
+    window.clearTimeout(notificationTimer);
+    window.clearTimeout(notificationAnimationTimer);
+    window.cancelAnimationFrame(notificationAnimationFrame);
+    messageNode.textContent = message;
+    toast.style.setProperty("--loop-notification-duration", `${duration}ms`);
+    toast.hidden = false;
+    toast.classList.remove("loop-notification-visible");
+    progress.style.animation = "none";
+    closeButton.onclick = () => dismissLoopNotification();
+
+    notificationAnimationFrame = requestAnimationFrame(() => {
+        notificationAnimationFrame = undefined;
+        toast.classList.add("loop-notification-visible");
+        progress.style.animation = "loop-notification-timer var(--loop-notification-duration) linear forwards";
+    });
+    notificationTimer = window.setTimeout(dismissLoopNotification, duration);
+}
+
+function dismissLoopNotification() {
+    const toast = document.querySelector("#loop-kawarp-toast");
+    if (!toast) return;
+
+    window.clearTimeout(notificationTimer);
+    window.cancelAnimationFrame(notificationAnimationFrame);
+    notificationAnimationFrame = undefined;
+    toast.classList.remove("loop-notification-visible");
+    notificationAnimationTimer = window.setTimeout(() => {
+        toast.hidden = true;
+    }, 220);
 }
 
 function disposeKawarpBackground() {
@@ -575,8 +644,8 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
         const details = await response.json();
         const liveInfo = getTrackInfo(playerBar);
         return {
-            title: details.title || liveInfo.title || domInfo.title,
-            artist: details.author_name || liveInfo.artist || domInfo.artist,
+            title: liveInfo.title !== "Unknown title" ? liveInfo.title : details.title || domInfo.title,
+            artist: liveInfo.artist !== "Unknown artist" ? liveInfo.artist : details.author_name || domInfo.artist,
             artistUrl: liveInfo.artistUrl || domInfo.artistUrl,
             album: liveInfo.album || domInfo.album,
             albumUrl: liveInfo.albumUrl || domInfo.albumUrl,
@@ -616,6 +685,11 @@ function updateLoop(artworkURL, trackInfo) {
                 <button id="loop-back-button" type="button" aria-label="Return to YouTube Music">&#215;</button>
                 <button id="loop-shortcuts-button" type="button" aria-label="Open Loop menu" title="Loop menu">?</button>
                 <canvas id="loop-kawarp-background" aria-hidden="true"></canvas>
+                <div id="loop-kawarp-toast" role="status" hidden>
+                    <span class="loop-notification-message"></span>
+                    <button class="loop-notification-close" type="button" aria-label="Dismiss notification">&#215;</button>
+                    <div class="loop-notification-progress" aria-hidden="true"></div>
+                </div>
                 <div id="loop-shortcuts-panel" hidden>
                     <div class="loop-shortcuts-title">Loop menu</div>
                     <label class="loop-theme-picker">
@@ -635,7 +709,7 @@ function updateLoop(artworkURL, trackInfo) {
                     <div><kbd>Ctrl + K</kbd> Search</div>
                     <div><kbd>Ctrl + Q</kbd> See queue</div>
                     <div><kbd>Alt + L</kbd> Turn off screen <span>(with loop running)</span></div>
-                    <div><kbd>Ctrl + F5</kbd> Reload Loop</div>
+                    <div><kbd>Ctrl + F5</kbd> Reload Loop Session</div>
                     <div><kbd>F5</kbd> Reload Resources</div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
                     <label class="loop-navigation-toggle">
@@ -646,6 +720,9 @@ function updateLoop(artworkURL, trackInfo) {
                         <input id="loop-background-toggle" type="checkbox" checked>
                         Animated artwork background <span>(re-enable)</span>
                     </label>
+                    <div id="loop-kawarp-warning" class="loop-kawarp-warning" role="status" hidden>
+                        Kawarp may increase GPU usage and battery drain.
+                    </div>
                     <label class="loop-navigation-toggle">
                         <input id="loop-vinyl-toggle" type="checkbox">
                         Don’t show vinyl
@@ -972,6 +1049,7 @@ let metadataRequest = 0;
 let emptyScreenDismissed = false;
 let trackSyncTimer;
 let trackSyncObserver;
+let trackSyncHostObserver;
 let observedMedia = new Set();
 
 function scheduleTrackSync(playerBar, delay = 0) {
@@ -1024,9 +1102,11 @@ function observeMediaTrackChanges(playerBar) {
         // YouTube Music normally reuses the same media element for the next
         // song. These events still fire when the tab is hidden, unlike a
         // background-throttled polling loop.
-        ["loadedmetadata", "durationchange", "canplay", "play", "emptied", "loadstart"].forEach((eventName) => {
+        ["loadedmetadata", "durationchange", "canplay", "play", "playing", "emptied", "loadstart"].forEach((eventName) => {
             media.addEventListener(eventName, () => scheduleTrackSync(playerBar));
         });
+        const mediaObserver = new MutationObserver(() => scheduleTrackSync(playerBar));
+        mediaObserver.observe(media, { attributes: true, attributeFilter: ["src"] });
     }
 }
 
@@ -1037,10 +1117,23 @@ function watchTrackChanges(playerBar) {
         observeMediaTrackChanges(playerBar);
         scheduleTrackSync(playerBar);
     });
-    trackSyncObserver.observe(document.body, {
+    trackSyncObserver.observe(playerBar, {
         childList: true,
         subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["src", "href", "content", "aria-label"],
     });
+
+    trackSyncHostObserver?.disconnect();
+    trackSyncHostObserver = new MutationObserver(() => {
+        const currentPlayerBar = document.querySelector("ytmusic-player-bar");
+        if (currentPlayerBar && currentPlayerBar !== playerBar) {
+            watchTrackChanges(currentPlayerBar);
+            scheduleTrackSync(currentPlayerBar);
+        }
+    });
+    trackSyncHostObserver.observe(document.body, { childList: true, subtree: true });
 
     // Navigation and visibility events cover transitions where YouTube Music
     // changes the URL/player state without changing the DOM immediately.
@@ -1063,21 +1156,18 @@ function watchTrackChanges(playerBar) {
 
 async function updateForCurrentTrack(playerBar) {
     const currentPlayerBar = document.querySelector("ytmusic-player-bar") || playerBar;
-    const trackId = getCurrentTrackId();
+    const trackId = getCurrentTrackId(currentPlayerBar);
     const liveTrackInfo = getTrackInfo(currentPlayerBar);
-    const trackKey = [trackId || "", liveTrackInfo.title, liveTrackInfo.artist, liveTrackInfo.album].join("|");
-    if (!trackId) {
-        const media = getCurrentMedia();
+    const artworkURL = getVinylArtwork(trackId);
+    const trackSignature = [
+        trackId || "",
+        liveTrackInfo.title,
+        liveTrackInfo.artist,
+        liveTrackInfo.album,
+        artworkURL,
+    ].join("|");
+    if (!trackId && !getCurrentMedia()) {
         const loop = document.getElementById("loop");
-        if (media && !emptyScreenDismissed) {
-            if (!loop || loop.classList.contains("loop-empty")) {
-                updateLoop(
-                    lastTrackId ? getVinylArtwork(lastTrackId) : getFallbackArtwork(),
-                    getTrackInfo(currentPlayerBar)
-                );
-            }
-            return;
-        }
         if (!emptyScreenDismissed) {
             updateLoop(getFallbackArtwork(), {
                 title: "Nothing is playing",
@@ -1089,7 +1179,7 @@ async function updateForCurrentTrack(playerBar) {
         return;
     }
     emptyScreenDismissed = false;
-    if (trackId === lastTrackId && trackKey === lastTrackKey) {
+    if (trackSignature === lastTrackKey) {
         const albumNode = document.querySelector("#loop-track-album");
         if (albumNode && albumNode.textContent === "Unknown album" && liveTrackInfo.album !== "Unknown album") {
             albumNode.textContent = liveTrackInfo.album;
@@ -1104,12 +1194,21 @@ async function updateForCurrentTrack(playerBar) {
     }
 
     lastTrackId = trackId;
-    lastTrackKey = trackKey;
+    lastTrackKey = trackSignature;
     const requestId = ++metadataRequest;
-    updateLoop(getVinylArtwork(trackId), liveTrackInfo);
+    updateLoop(artworkURL, liveTrackInfo);
     syncRecordMotion();
     const trackInfo = await getTrackInfoFromTrackId(trackId, currentPlayerBar);
-    if (requestId !== metadataRequest || trackId !== getCurrentTrackId()) return;
+    const activePlayerBar = document.querySelector("ytmusic-player-bar") || playerBar;
+    const currentInfo = getTrackInfo(activePlayerBar);
+    const currentSignature = [
+        getCurrentTrackId(activePlayerBar) || "",
+        currentInfo.title,
+        currentInfo.artist,
+        currentInfo.album,
+        getVinylArtwork(getCurrentTrackId(activePlayerBar)),
+    ].join("|");
+    if (requestId !== metadataRequest || trackSignature !== currentSignature) return;
     updateLoop(getVinylArtwork(trackId), trackInfo);
     syncRecordMotion();
     console.log("[loop.mp3] Current track metadata:", trackInfo);
