@@ -3,19 +3,25 @@ const { contextBridge, ipcRenderer } = require("electron");
 // The YouTube Music extension runs in an isolated world. Passing updates through
 // postMessage keeps the Discord client in the Electron process instead of
 // exposing Node.js to the music page.
-window.addEventListener("message", (event) => {
+window.addEventListener("message", async (event) => {
     if (event.source !== window || event.data?.source !== "loop.mp3") return;
     if (event.data.type === "discord-rpc:update") {
         ipcRenderer.send("discord-rpc:update", event.data.activity);
     } else if (event.data.type === "discord-rpc:clear") {
         ipcRenderer.send("discord-rpc:clear");
     } else if (event.data.type === "loop:screen-off") {
-        ipcRenderer.send("loop:screen-off")
+        ipcRenderer.send("loop:screen-off");
     } else if (event.data.type === "loop:is-screen-off-supported") {
-        ipcRenderer.send("loop:is-screen-off-supported")
+        const supported = await ipcRenderer.invoke(
+            "loop:is-screen-off-supported"
+        );
+        window.postMessage({
+            source: "loop.mp3",
+            type: "loop:is-screen-off-supported-response",
+            supported
+        }, "*");
     }
 });
-
 contextBridge.exposeInMainWorld("loopElectron", {
     isElectron: true,
 });
