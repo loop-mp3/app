@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld("loopElectron", {
     isElectron: true,
 });
 
-contextBridge.exposeInMainWorld("loop", {
-    getPlatform: () => ipcRenderer.invoke("loop:get-platform")
+window.addEventListener("message", async (event) => {
+    if (event.source !== window) return;
+    if (event.data?.source !== "loop.mp3") return;
+
+    if (event.data.type === "loop:get-platform") {
+        const platform = await ipcRenderer.invoke("loop:get-platform");
+
+        window.postMessage({
+            source: "loop.mp3",
+            type: "loop:platform",
+            platform
+        }, "*");
+    }
 });
