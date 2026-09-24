@@ -41,6 +41,24 @@
     },
     "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "tar.gz"
+      ],
+      "category": "AudioVideo"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.music"
     }
   },
   "repository": {
