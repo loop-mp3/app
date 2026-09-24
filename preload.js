@@ -17,3 +17,7 @@ window.addEventListener("message", (event) => {
 contextBridge.exposeInMainWorld("loopElectron", {
     isElectron: true,
 });
+
+contextBridge.exposeInMainWorld("loop", {
+    getPlatform: () => ipcRenderer.invoke("loop:get-platform")
+});

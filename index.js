@@ -16,6 +16,10 @@ let discordClient;
 let discordReady = false;
 let lastActivity;
 
+ipcMain.handle("loop:get-platform", () => {
+    return process.platform;
+});
+
 function sendDiscordActivity() {
     if (!discordReady || !lastActivity) return;
     const {
