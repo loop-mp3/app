@@ -2028,30 +2028,7 @@ document.addEventListener("keydown", (event) => {
     }
 });
 
-async function getCapabilities() {
-    if (!window.loop?.getCapabilities) {
-        console.warn("[loop.mp3] Screen sleep is not available");
-        return {
-            screenOff: false
-        };
-    }
 
-    return await window.loop.getCapabilities();
-}
-
-async function checkCapabilities() {
-    const capabilities = await getCapabilities();
-
-    if (capabilities.screenOff) {
-        console.log("[loop.mp3] Screen sleep is available");
-        // Show sleep button
-    } else {
-        console.warn("[loop.mp3] Screen sleep is not available");
-        // Hide/disable sleep button
-    }
-}
-
-checkCapabilities();
 
 async function init(playerBar) {
     console.log("[loop.mp3] YTM is ready", playerBar);
@@ -2153,10 +2130,14 @@ loadKawarpRenderer().catch((error) => {
 loadKawarpSettings();
 loadLoopPreferences();
 waitForYTM(init);
-const isSleep = await isSleepSupported();
+async function checkIsSleepSupported() {
+    const isSleep = await isSleepSupported();
 
-if (isSleep) {
-    console.log("[loop.mp3] Screen sleep supported");
-} else {
-    console.warn("[loop.mp3] Screen sleep not supported");
+    if (isSleep) {
+        console.log("[loop.mp3] Screen sleep supported");
+    } else {
+        console.warn("[loop.mp3] Screen sleep not supported");
+    }
 }
+
+checkIsSleepSupported()
