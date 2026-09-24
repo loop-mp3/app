@@ -34,5 +34,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: ../loop-app-build/*.AppImage
+          path: dist/*.AppImage
           if-no-files-found: warn

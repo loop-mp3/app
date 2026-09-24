@@ -35,6 +35,6 @@ jobs:
         with:
           name: macos-build
           path: |
-            ../loop-app-build/*.dmg
-            ../loop-app-build/*.zip
+            dist/*.dmg
+            dist/*.zip
           if-no-files-found: warn

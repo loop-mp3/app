@@ -21,7 +21,7 @@
     "appId": "com.loop.app",
     "productName": "Loop",
     "directories": {
-      "output": "../loop-app-build"
+      "output": "dist"
     },
     "files": [
       "**/*",
