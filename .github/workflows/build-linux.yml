@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Build Linux packages
-        run: npx electron-builder --linux appimage deb rpm tar.gz
+        run: npx electron-builder --linux appimage deb rpm tar.gz --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
