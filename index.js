@@ -77,16 +77,11 @@ function clearDiscordActivity() {
 }
 
 function isSleepSupported() {
-    if (process.platform !== "win32") {
-        return true;
-    } else {
-        return false;
-    }
+    return process.platform === "win32";
 }
 
-ipcMain.on("loop:is-screen-off-supported", () => {
-    const res = isSleepSupported()
-    return res;
+ipcMain.handle("loop:is-screen-off-supported", () => {
+    return isSleepSupported();
 });
 
 ipcMain.on("loop:screen-off", () => {
