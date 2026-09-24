@@ -11,6 +11,8 @@ window.addEventListener("message", (event) => {
         ipcRenderer.send("discord-rpc:clear");
     } else if (event.data.type === "loop:screen-off") {
         ipcRenderer.send("loop:screen-off")
+    } else if (event.data.type === "loop:is-screen-off-supported") {
+        ipcRenderer.send("loop:is-screen-off-supported")
     }
 });
 

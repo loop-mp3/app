@@ -76,6 +76,19 @@ function clearDiscordActivity() {
     if (discordReady) discordClient.clearActivity().catch(() => {});
 }
 
+function isSleepSupported() {
+    if (process.platform !== "win32") {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+ipcMain.on("loop:is-screen-off-supported", () => {
+    const res = isSleepSupported()
+    return res;
+});
+
 ipcMain.on("loop:screen-off", () => {
     if (process.platform !== "win32") {
         console.warn("[screen] Screen disable is only supported on Windows.");
