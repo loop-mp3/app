@@ -40,3 +40,17 @@ window.addEventListener("message", async (event) => {
         }, "*");
     }
 });
+
+contextBridge.exposeInMainWorld("electronAPI", {
+    openMiniPlayer: () => {
+        ipcRenderer.send("loop:electron-open-mini-player");
+    },
+
+    closeMiniPlayer: () => {
+        ipcRenderer.send("loop:electron-close-mini-player");
+    },
+
+    updateMiniPlayer: (state) => {
+        ipcRenderer.send("loop:electron-mini-player-state", state);
+    }
+});

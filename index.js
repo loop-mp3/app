@@ -111,6 +111,27 @@ ipcMain.on("loop:screen-off", () => {
     );
 });
 
+window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+
+    const { source, type, state } = event.data || {};
+
+    if (source !== "loop.mp3") return;
+
+    switch (type) {
+        case "loop:electron-open-mini-player":
+            window.electronAPI.openMiniPlayer();
+            break;
+
+        case "loop:electron-close-mini-player":
+            window.electronAPI.closeMiniPlayer();
+            break;
+
+        case "loop:electron-mini-player-state":
+            window.electronAPI.updateMiniPlayer(state);
+            break;
+    }
+});
 
 ipcMain.on("discord-rpc:update", (_event, activity) => {
     if (!activity || typeof activity !== "object") return;
