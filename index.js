@@ -15,6 +15,10 @@ const LOOP_URL = "https://loop.mizucode.qzz.io";
 let discordClient;
 let discordReady = false;
 let lastActivity;
+let mainWindow = null;
+let miniPlayerWindow = null;
+let miniPlayerPendingState = null;
+let quitting = false;
 
 ipcMain.handle("loop:get-platform", () => {
     return process.platform;
@@ -111,27 +115,7 @@ ipcMain.on("loop:screen-off", () => {
     );
 });
 
-window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
 
-    const { source, type, state } = event.data || {};
-
-    if (source !== "loop.mp3") return;
-
-    switch (type) {
-        case "loop:electron-open-mini-player":
-            window.electronAPI.openMiniPlayer();
-            break;
-
-        case "loop:electron-close-mini-player":
-            window.electronAPI.closeMiniPlayer();
-            break;
-
-        case "loop:electron-mini-player-state":
-            window.electronAPI.updateMiniPlayer(state);
-            break;
-    }
-});
 
 ipcMain.on("discord-rpc:update", (_event, activity) => {
     if (!activity || typeof activity !== "object") return;
@@ -151,6 +135,83 @@ ipcMain.on("discord-rpc:update", (_event, activity) => {
 });
 
 ipcMain.on("discord-rpc:clear", clearDiscordActivity);
+
+// ─────────────────────────────────────────────────────────
+// Mini-player window management
+// ─────────────────────────────────────────────────────────
+
+function ensureMiniPlayerWindow() {
+    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+        return miniPlayerWindow;
+    }
+
+    const win = new BrowserWindow({
+        width: 520,
+        height: 210,
+        show: false,
+        frame: false,
+        alwaysOnTop: true,
+        resizable: true,
+        skipTaskbar: true,
+        backgroundColor: "#1e1e2e",
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            preload: path.join(__dirname, "mini-player-preload.js")
+        }
+    });
+
+    win.webContents.on("did-finish-load", () => {
+        if (miniPlayerPendingState) {
+            win.webContents.send(
+                "loop:electron-mini-player-state",
+                miniPlayerPendingState
+            );
+        }
+    });
+
+    // Hide instead of destroy when the user closes the mini-player.
+    win.on("close", (event) => {
+        if (quitting) return;
+        event.preventDefault();
+        win.hide();
+    });
+
+    win.loadFile(path.join(__dirname, "miniplayer.html"));
+    miniPlayerWindow = win;
+    return win;
+}
+
+function openMiniPlayer() {
+    const win = ensureMiniPlayerWindow();
+    win.show();
+    win.focus();
+}
+
+function hideMiniPlayer() {
+    if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+        miniPlayerWindow.hide();
+    }
+}
+
+ipcMain.on("loop:electron-open-mini-player", openMiniPlayer);
+ipcMain.on("loop:electron-close-mini-player", hideMiniPlayer);
+
+ipcMain.on("loop:electron-mini-player-state", (_event, state) => {
+    miniPlayerPendingState = state;
+    const win = miniPlayerWindow;
+
+    if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+        win.webContents.send("loop:electron-mini-player-state", state);
+    }
+});
+
+// Commands sent by the mini-player renderer get routed back into the main
+// window so the extension can act on them (play/pause, seek, etc.).
+ipcMain.on("loop:electron-mini-player-command", (_event, value) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("loop:electron-mini-player-command", value);
+});
 
 function findExtensionDirs(dir) {
     const results = [];
@@ -227,6 +288,17 @@ async function createWindow() {
         }
     });
 
+    mainWindow = win;
+    win.on("minimize", openMiniPlayer);
+    win.on("restore", hideMiniPlayer);
+    win.on("closed", () => {
+        if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
+            miniPlayerWindow.destroy();
+        }
+        miniPlayerWindow = null;
+        mainWindow = null;
+    });
+
     win.removeMenu();
     win.webContents.on("before-input-event", (event, input) => {
         if (
@@ -264,6 +336,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+    quitting = true;
     clearDiscordActivity();
     discordClient?.destroy();
 });

@@ -20,6 +20,12 @@ window.addEventListener("message", async (event) => {
             type: "loop:is-screen-off-supported-response",
             supported
         }, "*");
+    } else if (event.data.type === "loop:electron-open-mini-player") {
+        ipcRenderer.send("loop:electron-open-mini-player");
+    } else if (event.data.type === "loop:electron-close-mini-player") {
+        ipcRenderer.send("loop:electron-close-mini-player");
+    } else if (event.data.type === "loop:electron-mini-player-state") {
+        ipcRenderer.send("loop:electron-mini-player-state", event.data.state);
     }
 });
 contextBridge.exposeInMainWorld("loopElectron", {
@@ -52,5 +58,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     updateMiniPlayer: (state) => {
         ipcRenderer.send("loop:electron-mini-player-state", state);
+    },
+
+    sendMiniPlayerCommand: (command, data) => {
+        ipcRenderer.send("loop:electron-mini-player-command", {
+            command,
+            ...(data || {})
+        });
     }
+});
+
+// Mini-player commands arriving from the main process are handed back to the
+// page so the extension can act on them (play/pause, previous, next, seek...).
+ipcRenderer.on("loop:electron-mini-player-command", (_event, value) => {
+    window.postMessage({
+        source: "loop.mp3",
+        type: "loop:electron-mini-player-command",
+        value
+    }, "*");
 });

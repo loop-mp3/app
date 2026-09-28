@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en" data-theme="default">
+<head>
+    <meta charset="utf-8">
+    <title>Loop · Mini Player</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --mini-bg: #000;
+            --mini-text: #fff;
+            --mini-muted: rgba(255, 255, 255, .6);
+            --mini-control: rgba(255, 255, 255, .12);
+            --mini-accent: #fff;
+            --mini-border: rgba(255, 255, 255, .18);
+        }
+        html[data-theme="sharp"] {
+            color-scheme: light;
+            --mini-bg: #000;
+            --mini-text: #fff;
+            --mini-muted: #fff;
+            --mini-control: #000;
+            --mini-accent: #fff;
+            --mini-border: #fff;
+        }
+        html[data-theme="catppuccin"] {
+            --mini-bg: #1e1e2e;
+            --mini-text: #cdd6f4;
+            --mini-muted: #a6adc8;
+            --mini-control: #313244;
+            --mini-accent: #cba6f7;
+            --mini-border: #45475a;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--mini-bg);
+            color: var(--mini-text);
+            font-family: system-ui, sans-serif;
+        }
+
+        #mini-player {
+            -webkit-app-region: drag;
+            box-sizing: border-box;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+        }
+
+        #artwork {
+            flex: 0 0 136px;
+            width: 136px;
+            height: 136px;
+            object-fit: cover;
+            border: 1px solid var(--mini-border);
+            border-radius: 10px;
+            background: var(--mini-control);
+        }
+
+        #content {
+            flex: 1;
+            min-width: 0;
+            -webkit-app-region: no-drag;
+            position: relative;
+            padding-top: 18px;
+        }
+
+        #title,
+        #artist,
+        #album {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #title {
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        #artist,
+        #album {
+            margin-top: 4px;
+            color: var(--mini-muted);
+            font-size: 13px;
+        }
+
+        #album[hidden] {
+            display: none;
+        }
+
+        #timeline {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-top: 11px;
+            color: var(--mini-muted);
+            font-size: 11px;
+        }
+
+        #seek {
+            flex: 1;
+            min-width: 80px;
+            accent-color: var(--mini-accent);
+        }
+
+        #controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 5px;
+        }
+
+        #controls .spacer {
+            flex: 1;
+        }
+
+        button {
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--mini-border);
+            border-radius: 50%;
+            background: var(--mini-control);
+            color: var(--mini-text);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--mini-accent);
+            color: var(--mini-bg);
+        }
+
+        button:disabled {
+            opacity: .35;
+            cursor: default;
+        }
+
+        #play-pause {
+            background: var(--mini-accent);
+            color: var(--mini-bg);
+            font-size: 16px;
+        }
+
+        #close {
+            width: 24px;
+            height: 24px;
+            border: 0;
+            background: transparent;
+            color: var(--mini-muted);
+            font-size: 14px;
+            position: absolute;
+            top: -6px;
+            right: 0;
+        }
+
+        #close:hover {
+            background: transparent;
+            color: var(--mini-text);
+        }
+
+        html[data-theme="sharp"] button {
+            border-radius: 0;
+            border-width: 2px;
+        }
+
+        html[data-theme="sharp"] #play-pause {
+            background: #fff;
+            color: #000;
+        }
+
+        html[data-theme="catppuccin"] button {
+            border-radius: 10px;
+        }
+
+        @media (max-width: 390px) {
+            #artwork {
+                flex-basis: 104px;
+                width: 104px;
+                height: 104px;
+            }
+            #mini-player {
+                gap: 10px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="mini-player">
+        <img id="artwork" src="" alt="Track artwork">
+        <div id="content">
+            <button id="close" type="button" aria-label="Close mini player" title="Close mini player">&#10005;</button>
+            <div id="title">Nothing playing</div>
+            <div id="artist">Search something to play</div>
+            <div id="album">&#8203;</div>
+            <div id="timeline">
+                <span id="current-time">0:00</span>
+                <input id="seek" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through track" disabled>
+                <span id="duration">0:00</span>
+            </div>
+            <div id="controls">
+                <button id="previous" type="button" aria-label="Previous track" title="Previous track">&#9198;</button>
+                <button id="play-pause" type="button" aria-label="Play" title="Play">&#9654;</button>
+                <button id="next" type="button" aria-label="Next track" title="Next track">&#9197;</button>
+                <span class="spacer"></span>
+            </div>
+        </div>
+    </div>
+    <script src="miniplayer-renderer.js"></script>
+</body>
+</html>
