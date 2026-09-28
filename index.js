@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain } = require("electron");
+const { app, BrowserWindow, session, ipcMain, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const DiscordRPC = require("discord-rpc");
@@ -184,6 +184,14 @@ function ensureMiniPlayerWindow() {
 
 function openMiniPlayer() {
     const win = ensureMiniPlayerWindow();
+    const display = screen.getDisplayMatching(mainWindow?.getBounds() || win.getBounds());
+    const { workArea } = display;
+    const [width, height] = win.getSize();
+    const margin = 20;
+    win.setPosition(
+        workArea.x + workArea.width - width - margin,
+        workArea.y + workArea.height - height - margin
+    );
     win.show();
     win.focus();
 }
