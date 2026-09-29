@@ -42,9 +42,12 @@ async function updateKawarp(artworkURL) {
 
     try {
         if (!kawarpModulePromise) {
-            const moduleURL = await api.getKawarpModuleURL();
-            if (!moduleURL) return;
-            kawarpModulePromise = import(moduleURL);
+            const moduleSource = await api.getKawarpModuleSource();
+            if (!moduleSource) return;
+            const moduleURL = URL.createObjectURL(new Blob([moduleSource], {
+                type: "text/javascript",
+            }));
+            kawarpModulePromise = import(moduleURL).finally(() => URL.revokeObjectURL(moduleURL));
         }
         const { Kawarp } = await kawarpModulePromise;
         const options = {
@@ -62,7 +65,8 @@ async function updateKawarp(artworkURL) {
         } else {
             kawarpRenderer.setOptions(options);
         }
-        kawarpCanvas.style.opacity = "1";
+        console.warn("[loop] Mini-player Kawarp opacity is overridden to 0.33; configured opacity is ignored.");
+        kawarpCanvas.style.opacity = String(0.33);
         if (artworkURL && artworkURL !== kawarpArtwork) {
             kawarpArtwork = artworkURL;
             await kawarpRenderer.loadImage(artworkURL);

@@ -20,6 +20,7 @@ let miniPlayerWindow = null;
 let miniPlayerPendingState = null;
 let kawarpState = { enabled: false, settings: {} };
 let kawarpModuleURL = null;
+let kawarpModuleSource = null;
 let quitting = false;
 
 ipcMain.handle("loop:get-platform", () => {
@@ -28,6 +29,7 @@ ipcMain.handle("loop:get-platform", () => {
 
 ipcMain.handle("loop:electron-get-kawarp-state", () => kawarpState);
 ipcMain.handle("loop:electron-get-kawarp-module-url", () => kawarpModuleURL);
+ipcMain.handle("loop:electron-get-kawarp-module-source", () => kawarpModuleSource);
 
 function sendDiscordActivity() {
     if (!discordReady || !lastActivity) return;
@@ -158,8 +160,7 @@ function ensureMiniPlayerWindow() {
         alwaysOnTop: true,
         resizable: true,
         skipTaskbar: true,
-        transparent: true,
-        backgroundColor: "#00000000",
+        backgroundColor: "#1e1e2e",
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -293,6 +294,14 @@ async function loadExtensions() {
             console.log(`[ext] Loaded: ${name} (${extension.id})`);
             if (name === "loop") {
                 kawarpModuleURL = `chrome-extension://${extension.id}/modules/kawarp.js`;
+                try {
+                    kawarpModuleSource = fs.readFileSync(
+                        path.join(extPath, "modules", "kawarp.js"),
+                        "utf8"
+                    );
+                } catch (error) {
+                    console.warn("[ext] Could not read Kawarp module:", error.message);
+                }
             }
         } catch (error) {
             console.error(

@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld("miniPlayer", {
     },
 
     getKawarpState: () => ipcRenderer.invoke("loop:electron-get-kawarp-state"),
-    getKawarpModuleURL: () => ipcRenderer.invoke("loop:electron-get-kawarp-module-url"),
+    getKawarpModuleSource: () => ipcRenderer.invoke("loop:electron-get-kawarp-module-source"),
 
     sendCommand: (command, data) => {
         ipcRenderer.send("loop:electron-mini-player-command", {
