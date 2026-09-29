@@ -16,6 +16,7 @@ let kawarpRenderer;
 let kawarpState;
 let kawarpArtwork = "";
 let kawarpModulePromise;
+let currentArtworkURL = "";
 const fallbackArtworkURLs = new Map();
 const fallbackArtworkPromises = new Map();
 let artworkRequest = 0;
@@ -67,6 +68,7 @@ async function updateKawarp(artworkURL) {
         kawarpArtwork = "";
         return;
     }
+    if (!artworkURL) return;
 
     try {
         if (!kawarpModulePromise) {
@@ -112,8 +114,9 @@ function render(state) {
     const requestId = ++artworkRequest;
     resolveArtworkURL(state.artwork || "").then((artworkURL) => {
         if (requestId !== artworkRequest) return;
+        currentArtworkURL = artworkURL;
         if (artworkURL) artwork.src = artworkURL;
-        updateKawarp(artworkURL);
+        updateKawarp(currentArtworkURL);
     });
 
     title.textContent = state.title || "Nothing playing";
@@ -154,11 +157,11 @@ if (api.onState) {
     api.onState(render);
     api.onKawarpState((state) => {
         kawarpState = state;
-        updateKawarp(artwork.src);
+        updateKawarp(currentArtworkURL);
     });
     api.getKawarpState().then((state) => {
         kawarpState = state;
-        updateKawarp(artwork.src);
+        updateKawarp(currentArtworkURL);
     }).catch((error) => console.warn("[loop] Could not read Kawarp state:", error));
 } else {
     console.warn("[loop] miniPlayer bridge unavailable");
