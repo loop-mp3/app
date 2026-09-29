@@ -60,7 +60,7 @@ function formatTime(seconds) {
 
 async function updateKawarp(artworkURL) {
     const settings = kawarpState?.settings || {};
-    const enabled = Boolean(kawarpState?.enabled) && document.documentElement.dataset.theme !== "sharp";
+    const enabled = Boolean(kawarpState?.enabled);
     kawarpCanvas.style.display = enabled ? "block" : "none";
     if (!enabled) {
         kawarpRenderer?.dispose();
