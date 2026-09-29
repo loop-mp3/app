@@ -482,10 +482,17 @@ function showAuthWarningPopup() {
 }
 
 function findYTMActionButton(action) {
+    const actionBar = document.querySelector("yt-video-action-bar-view-model.ytMusicMiniPlayerActionBar") ||
+        document.querySelector("yt-video-action-bar-view-model");
+    const playerPage = document.querySelector("ytmusic-player-page");
+    const playerBar = playerPage?.querySelector("ytmusic-player-bar") ||
+        document.querySelector("ytmusic-player-bar");
     const roots = [
+        actionBar,
         document.querySelector("ytmusic-miniplayer-slot#player-bar"),
+        playerBar,
         document.querySelector("ytmusic-track-info"),
-        getYTMPlayerRoot(),
+        playerPage || getYTMPlayerRoot(),
         document,
     ].filter((root, index, all) => root && all.indexOf(root) === index);
 
@@ -493,10 +500,12 @@ function findYTMActionButton(action) {
     // Prefer its action-specific button so a Like control elsewhere in the
     // page cannot be mistaken for the current track's feedback button.
     const rendererButtonSelector = action === "like"
-        ? "#button-shape-like button, .like button"
-        : "#button-shape-dislike button, .dislike button";
+        ? "like-button-view-model button, #button-shape-like button, #button-shape-like, .like button, .like"
+        : "dislike-button-view-model button, #button-shape-dislike button, #button-shape-dislike, .dislike button, .dislike";
     const rendererButton = roots
-        .flatMap((root) => [...root.querySelectorAll("ytmusic-like-button-renderer")])
+        .flatMap((root) => [...root.querySelectorAll(
+            "ytmusic-like-button-renderer, segmented-like-dislike-button-view-model"
+        )])
         .map((renderer) => renderer.querySelector(rendererButtonSelector))
         .find((button) => button && !button.closest("#loop") && (
             button.offsetParent !== null || button.getClientRects().length > 0
@@ -947,10 +956,19 @@ function triggerYTMAction(action) {
     const button = findYTMActionButton(action);
     if (button) {
         button.click();
-        setTimeout(syncTrackFeedbackState, 100);
+        scheduleTrackFeedbackSync();
         return;
     }
     console.warn(`[loop.mp3] Could not find YouTube Music ${action} button.`);
+}
+
+let feedbackSyncTimers = [];
+
+function scheduleTrackFeedbackSync() {
+    feedbackSyncTimers.forEach((timer) => window.clearTimeout(timer));
+    feedbackSyncTimers = [100, 300, 800, 1500, 2500].map((delay) =>
+        window.setTimeout(syncTrackFeedbackState, delay)
+    );
 }
 
 function syncTrackFeedbackState() {
@@ -960,15 +978,27 @@ function syncTrackFeedbackState() {
 
     for (const [action, dockButton] of [["like", likeButton], ["dislike", dislikeButton]]) {
         const ytmButton = findYTMActionButton(action);
-        const likeRenderer = ytmButton?.closest("ytmusic-like-button-renderer") ||
-            document.querySelector("ytmusic-like-button-renderer");
-        const rendererStatus = likeRenderer?.getAttribute("like-status")?.toLowerCase();
+        const likeRenderer = ytmButton?.closest("ytmusic-like-button-renderer");
+        const playerPage = document.querySelector("ytmusic-player-page");
+        const playerBar = playerPage?.querySelector("ytmusic-player-bar") ||
+            document.querySelector("ytmusic-player-bar");
+        const statusSources = [likeRenderer, playerBar, playerPage, ytmButton].filter(Boolean);
+        const rendererStatus = statusSources
+            .map((source) => source.getAttribute("like-status") ||
+                source.getAttribute("data-like-status") ||
+                source.getAttribute("data-status"))
+            .find(Boolean)?.toLowerCase();
+        const actionContainer = ytmButton?.closest(
+            "#button-shape-like, #button-shape-dislike, .like, .dislike"
+        );
+        const buttonPressed = [ytmButton, actionContainer, likeRenderer]
+            .some((source) => source?.getAttribute("aria-pressed") === "true");
         const label = [
             ytmButton?.getAttribute("aria-label"),
             ytmButton?.getAttribute("title"),
         ].filter(Boolean).join(" ").toLowerCase();
         const isActive = rendererStatus === action ||
-            ytmButton?.getAttribute("aria-pressed") === "true" ||
+            buttonPressed ||
             label.includes(`un${action}`) ||
             label.includes(`remove ${action}`);
         dockButton.classList.toggle("loop-action-active", Boolean(isActive));
@@ -1762,6 +1792,7 @@ function updateLoop(artworkURL, trackInfo) {
     emptyState.hidden = !trackInfo.empty;
     syncWindowTitle();
     syncTrackFeedbackState();
+    scheduleTrackFeedbackSync();
     updateKawarpArtwork(artwork.src);
     updatePlaybackControls(getCurrentMedia());
     publishDiscordActivity({ force: true });
@@ -2076,6 +2107,7 @@ async function updateForCurrentTrack(playerBar) {
         // track change. Keep retrying while the track is current so the dock
         // does not remain stuck with the previous track's liked state.
         syncTrackFeedbackState();
+        scheduleTrackFeedbackSync();
         return;
     }
 
