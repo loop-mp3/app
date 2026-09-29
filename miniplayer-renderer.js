@@ -16,10 +16,38 @@ let kawarpRenderer;
 let kawarpState;
 let kawarpArtwork = "";
 let kawarpModulePromise;
+const fallbackArtworkURLs = new Map();
+const fallbackArtworkPromises = new Map();
+let artworkRequest = 0;
 
 const send = (command, data) => {
     if (api.sendCommand) api.sendCommand(command, data);
 };
+
+function resolveArtworkURL(artworkURL) {
+    if (typeof artworkURL !== "string") return Promise.resolve("");
+    const match = artworkURL.match(/\/static\/(fallback-artwork|fallback-legacy)\.png(?:[?#]|$)/);
+    if (!match || !api.getFallbackArtworkSource) return Promise.resolve(artworkURL);
+
+    const name = match[1];
+    if (fallbackArtworkURLs.has(name)) {
+        return Promise.resolve(fallbackArtworkURLs.get(name));
+    }
+    if (!fallbackArtworkPromises.has(name)) {
+        const promise = api.getFallbackArtworkSource(name).then((base64) => {
+            if (!base64) return artworkURL;
+            const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+            const blobURL = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+            fallbackArtworkURLs.set(name, blobURL);
+            return blobURL;
+        }).catch((error) => {
+            console.warn("[loop] Could not read fallback artwork:", error);
+            return artworkURL;
+        });
+        fallbackArtworkPromises.set(name, promise);
+    }
+    return fallbackArtworkPromises.get(name);
+}
 
 function formatTime(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -81,8 +109,12 @@ function render(state) {
     if (!state || typeof state !== "object") return;
 
     document.documentElement.dataset.theme = state.theme || "default";
-    if (state.artwork) artwork.src = state.artwork;
-    updateKawarp(state.artwork || "");
+    const requestId = ++artworkRequest;
+    resolveArtworkURL(state.artwork || "").then((artworkURL) => {
+        if (requestId !== artworkRequest) return;
+        if (artworkURL) artwork.src = artworkURL;
+        updateKawarp(artworkURL);
+    });
 
     title.textContent = state.title || "Nothing playing";
     artist.textContent = state.artist || "Search something to play";

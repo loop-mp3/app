@@ -21,6 +21,7 @@ let miniPlayerPendingState = null;
 let kawarpState = { enabled: false, settings: {} };
 let kawarpModuleURL = null;
 let kawarpModuleSource = null;
+let fallbackArtworkSources = {};
 let quitting = false;
 
 ipcMain.handle("loop:get-platform", () => {
@@ -30,6 +31,9 @@ ipcMain.handle("loop:get-platform", () => {
 ipcMain.handle("loop:electron-get-kawarp-state", () => kawarpState);
 ipcMain.handle("loop:electron-get-kawarp-module-url", () => kawarpModuleURL);
 ipcMain.handle("loop:electron-get-kawarp-module-source", () => kawarpModuleSource);
+ipcMain.handle("loop:electron-get-fallback-artwork-source", (_event, name) => {
+    return fallbackArtworkSources[name] || null;
+});
 
 function sendDiscordActivity() {
     if (!discordReady || !lastActivity) return;
@@ -301,6 +305,16 @@ async function loadExtensions() {
                     );
                 } catch (error) {
                     console.warn("[ext] Could not read Kawarp module:", error.message);
+                }
+                fallbackArtworkSources = {};
+                for (const name of ["fallback-artwork", "fallback-legacy"]) {
+                    try {
+                        fallbackArtworkSources[name] = fs.readFileSync(
+                            path.join(extPath, "static", `${name}.png`)
+                        ).toString("base64");
+                    } catch (error) {
+                        console.warn(`[ext] Could not read ${name}:`, error.message);
+                    }
                 }
             }
         } catch (error) {
