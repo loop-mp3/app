@@ -50,15 +50,23 @@ let lastDiscordUpdate = 0;
 let lastDiscordSignature = "";
 let lastElectronMiniPlayerSignature = "";
 
-function publishElectronKawarpState(requestId) {
+function getKawarpState() {
+    return {
+        // `enabled` is the effective state: it also includes the Loop animated
+        // background preference, not just the value in the Kawarp config.
+        enabled: kawarpEnabled,
+        settings: { ...kawarpSettings },
+        preferences: {
+            animatedBackground: loopPreferences.animatedBackground,
+        },
+    };
+}
+
+function publishElectronKawarpState() {
     window.postMessage({
         source: "loop.mp3",
         type: "loop:electron-kawarp-state",
-        ...(requestId ? { requestId } : {}),
-        state: {
-            enabled: Boolean(kawarpEnabled),
-            settings: { ...kawarpSettings },
-        },
+        state: getKawarpState(),
     }, "*");
 }
 
@@ -395,9 +403,6 @@ function applyLoopPreferences() {
     if (legacyFallbackToggle) legacyFallbackToggle.checked = Boolean(loopPreferences.useLegacyFallbackArtwork);
     setTrackNavigationButtonsVisible(Boolean(loopPreferences.showNavigationButtons));
     applyArtworkPreference();
-    kawarpEnabled = loopPreferences.animatedBackground && kawarpSettings.enabled !== false;
-    setKawarpCanvasVisibility(kawarpEnabled);
-    publishElectronKawarpState();
 }
 
 function applyArtworkPreference() {
@@ -2512,11 +2517,18 @@ function forceCustomFavicon() {
 
 window.addEventListener("message", (event) => {
     if (event.source !== window) return;
-    const { source, type, state } = event.data || {};
+    const { source, type, requestId } = event.data || {};
     if (source === "loop.electron" && type === "loop:electron-get-kawarp-state") {
-        publishElectronKawarpState(event.data.requestId);
+        window.postMessage({
+            source: "loop.mp3",
+            type: "loop:electron-kawarp-state",
+            requestId,
+            state: getKawarpState(),
+        }, "*");
         return;
     }
+
+    const state = event.data?.state;
     if (source !== "loop.mp3" || !window.electronAPI) return;
 
     switch (type) {
