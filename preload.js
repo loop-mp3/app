@@ -26,8 +26,38 @@ window.addEventListener("message", async (event) => {
         ipcRenderer.send("loop:electron-close-mini-player");
     } else if (event.data.type === "loop:electron-mini-player-state") {
         ipcRenderer.send("loop:electron-mini-player-state", event.data.state);
+    } else if (event.data.type === "loop:electron-kawarp-state") {
+        ipcRenderer.send("loop:electron-kawarp-state", event.data.state);
     }
 });
+
+function getKawarpState() {
+    return new Promise((resolve, reject) => {
+        const requestId = crypto.randomUUID();
+        const timeout = setTimeout(() => {
+            window.removeEventListener("message", onMessage);
+            reject(new Error("Timed out waiting for Kawarp state"));
+        }, 2000);
+
+        function onMessage(event) {
+            const message = event.data;
+            if (event.source !== window ||
+                message?.source !== "loop.mp3" ||
+                message?.type !== "loop:electron-kawarp-state" ||
+                message?.requestId !== requestId) return;
+            clearTimeout(timeout);
+            window.removeEventListener("message", onMessage);
+            resolve(message.state);
+        }
+
+        window.addEventListener("message", onMessage);
+        window.postMessage({
+            source: "loop.electron",
+            type: "loop:electron-get-kawarp-state",
+            requestId,
+        }, "*");
+    });
+}
 contextBridge.exposeInMainWorld("loopElectron", {
     isElectron: true,
 });
@@ -48,6 +78,8 @@ window.addEventListener("message", async (event) => {
 });
 
 contextBridge.exposeInMainWorld("electronAPI", {
+    getKawarpState,
+
     openMiniPlayer: () => {
         ipcRenderer.send("loop:electron-open-mini-player");
     },

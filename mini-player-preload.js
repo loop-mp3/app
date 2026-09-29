@@ -9,6 +9,15 @@ contextBridge.exposeInMainWorld("miniPlayer", {
         };
     },
 
+    onKawarpState: (callback) => {
+        const listener = (_event, state) => callback(state);
+        ipcRenderer.on("loop:electron-kawarp-state", listener);
+        return () => ipcRenderer.removeListener("loop:electron-kawarp-state", listener);
+    },
+
+    getKawarpState: () => ipcRenderer.invoke("loop:electron-get-kawarp-state"),
+    getKawarpModuleURL: () => ipcRenderer.invoke("loop:electron-get-kawarp-module-url"),
+
     sendCommand: (command, data) => {
         ipcRenderer.send("loop:electron-mini-player-command", {
             command,

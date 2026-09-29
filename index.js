@@ -18,11 +18,16 @@ let lastActivity;
 let mainWindow = null;
 let miniPlayerWindow = null;
 let miniPlayerPendingState = null;
+let kawarpState = { enabled: false, settings: {} };
+let kawarpModuleURL = null;
 let quitting = false;
 
 ipcMain.handle("loop:get-platform", () => {
     return process.platform;
 });
+
+ipcMain.handle("loop:electron-get-kawarp-state", () => kawarpState);
+ipcMain.handle("loop:electron-get-kawarp-module-url", () => kawarpModuleURL);
 
 function sendDiscordActivity() {
     if (!discordReady || !lastActivity) return;
@@ -153,7 +158,8 @@ function ensureMiniPlayerWindow() {
         alwaysOnTop: true,
         resizable: true,
         skipTaskbar: true,
-        backgroundColor: "#1e1e2e",
+        transparent: true,
+        backgroundColor: "#00000000",
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -168,6 +174,7 @@ function ensureMiniPlayerWindow() {
                 miniPlayerPendingState
             );
         }
+        win.webContents.send("loop:electron-kawarp-state", kawarpState);
     });
 
     // Hide instead of destroy when the user closes the mini-player.
@@ -211,6 +218,18 @@ ipcMain.on("loop:electron-mini-player-state", (_event, state) => {
 
     if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
         win.webContents.send("loop:electron-mini-player-state", state);
+    }
+});
+
+ipcMain.on("loop:electron-kawarp-state", (_event, state) => {
+    if (!state || typeof state !== "object") return;
+    kawarpState = {
+        enabled: Boolean(state.enabled),
+        settings: { ...(state.settings || {}) },
+    };
+    const win = miniPlayerWindow;
+    if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+        win.webContents.send("loop:electron-kawarp-state", kawarpState);
     }
 });
 
@@ -272,6 +291,9 @@ async function loadExtensions() {
             );
 
             console.log(`[ext] Loaded: ${name} (${extension.id})`);
+            if (name === "loop") {
+                kawarpModuleURL = `chrome-extension://${extension.id}/modules/kawarp.js`;
+            }
         } catch (error) {
             console.error(
                 `[ext] Failed to load ${name}:`,

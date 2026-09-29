@@ -11,6 +11,11 @@ const previous = document.getElementById("previous");
 const playPause = document.getElementById("play-pause");
 const next = document.getElementById("next");
 const close = document.getElementById("close");
+const kawarpCanvas = document.getElementById("mini-kawarp-background");
+let kawarpRenderer;
+let kawarpState;
+let kawarpArtwork = "";
+let kawarpModulePromise;
 
 const send = (command, data) => {
     if (api.sendCommand) api.sendCommand(command, data);
@@ -24,11 +29,56 @@ function formatTime(seconds) {
     return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
+async function updateKawarp(artworkURL) {
+    const settings = kawarpState?.settings || {};
+    const enabled = Boolean(kawarpState?.enabled) && document.documentElement.dataset.theme !== "sharp";
+    kawarpCanvas.style.display = enabled ? "block" : "none";
+    if (!enabled) {
+        kawarpRenderer?.dispose();
+        kawarpRenderer = undefined;
+        kawarpArtwork = "";
+        return;
+    }
+
+    try {
+        if (!kawarpModulePromise) {
+            const moduleURL = await api.getKawarpModuleURL();
+            if (!moduleURL) return;
+            kawarpModulePromise = import(moduleURL);
+        }
+        const { Kawarp } = await kawarpModulePromise;
+        const options = {
+            warpIntensity: settings.kawarpWarpIntensity,
+            blurPasses: settings.kawarpBlurPasses,
+            animationSpeed: settings.kawarpAnimationSpeed,
+            transitionDuration: settings.kawarpTransitionDuration,
+            saturation: settings.kawarpSaturation,
+            dithering: settings.kawarpDithering,
+            scale: settings.scale,
+        };
+        if (!kawarpRenderer) {
+            kawarpRenderer = new Kawarp(kawarpCanvas, options);
+            kawarpRenderer.start();
+        } else {
+            kawarpRenderer.setOptions(options);
+        }
+        kawarpCanvas.style.opacity = "1";
+        if (artworkURL && artworkURL !== kawarpArtwork) {
+            kawarpArtwork = artworkURL;
+            await kawarpRenderer.loadImage(artworkURL);
+        }
+    } catch (error) {
+        console.warn("[loop] Could not initialize mini-player Kawarp:", error);
+        kawarpCanvas.style.display = "none";
+    }
+}
+
 function render(state) {
     if (!state || typeof state !== "object") return;
 
     document.documentElement.dataset.theme = state.theme || "default";
     if (state.artwork) artwork.src = state.artwork;
+    updateKawarp(state.artwork || "");
 
     title.textContent = state.title || "Nothing playing";
     artist.textContent = state.artist || "Search something to play";
@@ -66,6 +116,14 @@ close.addEventListener("click", () => {
 
 if (api.onState) {
     api.onState(render);
+    api.onKawarpState((state) => {
+        kawarpState = state;
+        updateKawarp(artwork.src);
+    });
+    api.getKawarpState().then((state) => {
+        kawarpState = state;
+        updateKawarp(artwork.src);
+    }).catch((error) => console.warn("[loop] Could not read Kawarp state:", error));
 } else {
     console.warn("[loop] miniPlayer bridge unavailable");
 }

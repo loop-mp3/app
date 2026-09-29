@@ -37,7 +37,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: var(--mini-bg);
+            background: transparent;
             color: var(--mini-text);
             font-family: system-ui, sans-serif;
         }
@@ -51,7 +51,20 @@
             align-items: center;
             gap: 14px;
             padding: 12px 14px;
+            position: relative;
         }
+
+        #mini-kawarp-background {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 1;
+            pointer-events: none;
+        }
+
+        #mini-player > :not(#mini-kawarp-background) { position: relative; z-index: 1; }
 
         #artwork {
             flex: 0 0 136px;
@@ -194,6 +207,7 @@
 </head>
 <body>
     <div id="mini-player">
+        <canvas id="mini-kawarp-background" aria-hidden="true"></canvas>
         <img id="artwork" src="" alt="Track artwork">
         <div id="content">
             <button id="close" type="button" aria-label="Close mini player" title="Close mini player">&#10005;</button>
