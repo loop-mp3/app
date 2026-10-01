@@ -157,8 +157,9 @@ function ensureMiniPlayerWindow() {
     }
 
     const win = new BrowserWindow({
-        width: 520,
-        height: 210,
+        // 514 × 223
+        width: 448,
+        height: 170,
         show: false,
         frame: false,
         alwaysOnTop: true,
