@@ -1463,12 +1463,16 @@ function getTrackInfo(playerBar) {
         : root;
 
     const titleRoots = [dataRoot, root, document].filter((node, index, all) => node && all.indexOf(node) === index);
+    // Yo sir we no longer require you cuz we are hard coding the shi we cannot afford random strings leaking due to THIS STUPID FUCKING DOM FETCHING I CAN JUST FETCH THE FUCKING TITLE FORM THE OEMBED AND PLACE A PLACEHOLDER HERE
+    /*
     const title = titleRoots
         .flatMap((node) => [...node.querySelectorAll(
             "span.ytAttributedStringHost, .title, #title, yt-formatted-string.title, [class~='title']"
         )])
         .map((node) => node.textContent.trim())
-        .find((text) => text && !/^(playing from|auto-?play)(?:\s*[•·-].*)?$/i.test(text)) || "Unknown track";
+        .find((text) => text && !/^(playing from|auto-?play(?:\s+is\s+on)?)(?:\s*[•·-].*)?$/i.test(text)) || "Unknown track";
+        */
+    const title = "Unknown track";
     const byline = dataRoot.querySelector("yt-formatted-string.byline.ytmusic-player-bar") ||
         dataRoot.querySelector(".subtitle.ytmusic-player-bar yt-formatted-string.byline") ||
         dataRoot.querySelector(".byline, .subtitle, [class*='byline'], [class*='subtitle']");
@@ -1510,15 +1514,18 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
         return {
             // The player page contains context labels such as "Playing from"
             // and "Autoplay". oEmbed is the source of truth for track metadata.
-            title: details.title && !/^auto-?play$/i.test(details.title.trim())
-                ? details.title
-                : domInfo.title,
+            //title: details.title && !/^auto-?play$/i.test(details.title.trim())
+            //    ? details.title
+            //    : domInfo.title,
+            title: details.title,
+            // these fallbacks are here so incase something explodes we still get the data
             artist: details.author_name || domInfo.artist,
-            artistUrl: liveInfo.artistUrl || domInfo.artistUrl,
+            artistUrl: details.author_url || liveInfo.artistUrl || domInfo.artistUrl,
             album: details.album || liveInfo.album || domInfo.album,
             albumUrl: details.album_url || liveInfo.albumUrl || domInfo.albumUrl,
         };
     } catch (error) {
+        showLoopNotification("Could not fetch track metadata. Information might not load correctly press F5 to try again", 4000);
         console.warn("[loop.mp3] Could not fetch track metadata:", error);
         return domInfo;
     }
