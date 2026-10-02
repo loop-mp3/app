@@ -231,6 +231,7 @@ let loopPreferences = {
     showNavigationButtons: false,
     autoOpenMiniPlayer: true,
     useLegacyFallbackArtwork: false,
+    showAlbum: false,
     theme: "default",
 };
 let currentArtworkURL = "";
@@ -411,6 +412,7 @@ function applyLoopPreferences() {
     applyLoopTheme();
     miniPlayerBridge?.setTheme(loopPreferences.theme);
     loop.classList.toggle("loop-no-vinyl", loopPreferences.hideVinyl);
+    loop.classList.toggle("loop-hide-album", !loopPreferences.showAlbum);
     const vinylToggle = loop.querySelector("#loop-vinyl-toggle");
     if (vinylToggle) vinylToggle.checked = loopPreferences.hideVinyl;
     const navigationToggle = loop.querySelector("#loop-navigation-toggle");
@@ -419,6 +421,8 @@ function applyLoopPreferences() {
     if (miniPlayerToggle) miniPlayerToggle.checked = loopPreferences.autoOpenMiniPlayer !== false;
     const legacyFallbackToggle = loop.querySelector("#loop-legacy-fallback-toggle");
     if (legacyFallbackToggle) legacyFallbackToggle.checked = Boolean(loopPreferences.useLegacyFallbackArtwork);
+    const albumToggle = loop.querySelector("#loop-album-toggle");
+    if (albumToggle) albumToggle.checked = Boolean(loopPreferences.showAlbum);
     setTrackNavigationButtonsVisible(Boolean(loopPreferences.showNavigationButtons));
     applyArtworkPreference();
 }
@@ -1499,6 +1503,75 @@ function getTrackInfo(playerBar) {
     };
 }
 
+function getMusicAuthorUrl(authorUrl) {
+    if (!authorUrl) return "";
+
+    try {
+        const url = new URL(authorUrl);
+        if (url.hostname === "www.youtube.com" || url.hostname === "youtube.com") {
+            url.hostname = "music.youtube.com";
+        }
+        return url.toString();
+    } catch {
+        return authorUrl;
+    }
+}
+
+// Use the player endpoint to retrieve more accurate track metadata.
+const prettyPrintMetaCache = new Map();
+
+async function getPlayerMetadataPrettyPrint(trackId) {
+    if (!trackId) return null;
+    if (prettyPrintMetaCache.has(trackId)) {
+        return prettyPrintMetaCache.get(trackId);
+    }
+
+    try {
+        const response = await fetch(
+            "https://music.youtube.com/youtubei/v1/player?prettyPrint=false",
+            {
+                method: "POST",
+                credentials: "include",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    videoId: trackId,
+                    context: {
+                        client: {
+                            hl: "en-GB",
+                            gl: "IN",
+                            clientName: "WEB_REMIX",
+                            clientVersion: "1.20260928.13.00"
+                        }
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            console.error("[loop.mp3] Pretty print metadata request failed:", response.status);
+            showLoopNotification("Pretty print metadata retrieval failed Track information might not load correctly or might not be accurate press F5 to try again", 4000);
+            return null;
+        }
+
+        const data = await response.json();
+
+        const metadata = {
+            title: data.videoDetails?.title ?? null,
+            artist: data.videoDetails?.author ?? null
+        };
+
+        prettyPrintMetaCache.set(trackId, metadata);
+
+        return metadata;
+    } catch (error) {
+        console.error("[loop.mp3] Pretty print metadata retrieval failed:", error);
+        showLoopNotification("Pretty print metadata retrieval failed Track information might not load correctly or might not be accurate press F5 to try again", 4000);
+        return null;
+    }
+}
+
 // oEmbed resolves the canonical title and artist from the track ID. Album is
 // read from the linked album entry in YouTube Music's player bar.
 async function getTrackInfoFromTrackId(trackId, playerBar) {
@@ -1510,7 +1583,13 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`YouTube oEmbed returned ${response.status}`);
         const details = await response.json();
+        const prettyPrintMeta = await getPlayerMetadataPrettyPrint(trackId);
         const liveInfo = getTrackInfo(playerBar);
+        // a desperate attempt to get the album name from the blessed souls who are still stuck on the old player bar
+        const oldPlayerBarAlbumName =
+            playerBar
+                ?.querySelector('a.yt-simple-endpoint[href^="browse/"]')
+                ?.textContent.trim();
         const AuthorNameComposed =
             details.author_name.replace(/\s*[-–—]\s*Topic$/i, '').trim();        return {
             // The player page contains context labels such as "Playing from"
@@ -1518,11 +1597,12 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             //title: details.title && !/^auto-?play$/i.test(details.title.trim())
             //    ? details.title
             //    : domInfo.title,
-            title: details.title,
+            // currently only exposing the title and artist from pretty print
+            title: prettyPrintMeta?.title || details.title,
             // these fallbacks are here so incase something explodes we still get the data
-            artist: AuthorNameComposed || domInfo.artist,
-            artistUrl: details.author_url || liveInfo.artistUrl || domInfo.artistUrl,
-            album: details.album || liveInfo.album || domInfo.album,
+            artist: prettyPrintMeta?.artist || AuthorNameComposed || details.author_name || domInfo.artist,
+            artistUrl: getMusicAuthorUrl(details.author_url) || liveInfo.artistUrl || domInfo.artistUrl,
+            album: details.album || oldPlayerBarAlbumName || liveInfo.album || domInfo.album,
             albumUrl: details.album_url || liveInfo.albumUrl || domInfo.albumUrl,
         };
     } catch (error) {
@@ -1606,6 +1686,13 @@ function updateLoop(artworkURL, trackInfo) {
                         <input id="loop-vinyl-toggle" type="checkbox">
                         Don’t show vinyl
                     </label>
+                    <label class="loop-navigation-toggle">
+                        <input id="loop-album-toggle" type="checkbox">
+                        Show album name
+                    </label>
+                    <div class="loop-setting-warning" role="note">
+                        Album names may be inaccurate.
+                    </div>
                     <label class="loop-navigation-toggle">
                         <input id="loop-legacy-fallback-toggle" type="checkbox">
                         Use legacy fallback artwork
@@ -1708,6 +1795,11 @@ function updateLoop(artworkURL, trackInfo) {
         });
         loop.querySelector("#loop-vinyl-toggle").addEventListener("change", (event) => {
             loopPreferences.hideVinyl = event.target.checked;
+            saveLoopPreferences();
+            applyLoopPreferences();
+        });
+        loop.querySelector("#loop-album-toggle").addEventListener("change", (event) => {
+            loopPreferences.showAlbum = event.target.checked;
             saveLoopPreferences();
             applyLoopPreferences();
         });
