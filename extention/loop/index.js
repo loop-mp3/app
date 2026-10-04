@@ -1402,11 +1402,19 @@ function getExtensionURL(path) {
 
 async function getLyricsFromTrackInfo(trackId, title, artist) {
     try {
-        const titleComposed = title.replace(/\s/g, '+');
-        const artistComposed = artist.replace(/\s/g, '+');
-        const query = `${titleComposed}+${artistComposed}`;
-        const res = await fetch(`https://lrclib.net/api/search?q=${query}`);
-        const data = await res.json();
+        const query = new URLSearchParams({
+            q: `${title} ${artist}`,
+        }).toString();
+        const res = await fetch(`https://lrclib.net/api/search?${query}`);
+        let data = await res.json();
+        // Retry with the title alone when searching with the artist finds no match.
+        if (!data?.[0] && artist.trim()) {
+            // Give the first search a moment to settle before retrying without the artist.
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const titleOnlyQuery = new URLSearchParams({ q: title }).toString();
+            const titleOnlyResponse = await fetch(`https://lrclib.net/api/search?${titleOnlyQuery}`);
+            data = await titleOnlyResponse.json();
+        }
         // here we are gonna select the first result of the query
         const lyricsQueryFirstResult = data?.[0];
         if (!lyricsQueryFirstResult) {
@@ -1595,7 +1603,7 @@ function updateLoopLyrics(lyrics, empty = false) {
         submitLink.textContent = "Submit lyrics here";
         loading.appendChild(submitLink);
         
-        showLoopNotification("Submit lyrics for this track at https://lrclibup.boidu.dev/", 3000);
+        showLoopNotification("Lyrics unavailable", 3000);
         return;
     }
 
@@ -2575,6 +2583,28 @@ function updateLoop(artworkURL, trackInfo) {
             restoreLoopQueue();
             hideLoopSearch();
         });
+        document.addEventListener("pointerdown", (event) => {
+            const searchBar = document.querySelector("ytmusic-search-box");
+            const resultsPanel = document.getElementById("loop-search-results");
+            const searchButton = document.getElementById("loop-search-button");
+
+            if (!searchBar || searchBar.style.display === "none") return;
+            if (!(event.target instanceof Node)) return;
+            if (
+                searchBar.contains(event.target) ||
+                (resultsPanel && resultsPanel.contains(event.target)) ||
+                (searchButton && searchButton.contains(event.target))
+            ) {
+                return;
+            }
+
+            document.dispatchEvent(new KeyboardEvent("keydown", {
+                key: "Escape",
+                code: "Escape",
+                bubbles: true,
+                cancelable: true,
+            }));
+        }, true);
     }
     const artwork = loop.querySelector("#loop-artwork");
     const title = loop.querySelector("#loop-track-title");
@@ -2944,6 +2974,12 @@ async function updateForCurrentTrack(playerBar) {
         syncTrackFeedbackState();
         scheduleTrackFeedbackSync();
         return;
+    }
+
+    const searchBar = document.querySelector("ytmusic-search-box");
+    if (searchBar && searchBar.style.display !== "none") {
+        closeLoopSearchPanel();
+        hideLoopSearch();
     }
 
     lastTrackId = trackId;
