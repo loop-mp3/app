@@ -234,12 +234,17 @@ let loopPreferences = {
     autoOpenMiniPlayer: true,
     useLegacyFallbackArtwork: false,
     showAlbum: false,
+    showLyrics: false,
     theme: "default",
 };
 let currentArtworkURL = "";
 let kawarpRendererClass;
 let kawarpRendererPromise;
 let kawarpWarningTimer;
+let braccatoLyricsPromise;
+let braccatoLyricsRenderer;
+let braccatoLyricsMount;
+let lyricsRequestId = 0;
 let notificationTimer;
 let notificationAnimationTimer;
 let notificationAnimationFrame;
@@ -359,8 +364,12 @@ function showOnboarding() {
                 <label class="loop-onboarding-check"><input class="loop-onboarding-mini-player" type="checkbox"> Open the mini-player when the app is minimized</label>
                 <label class="loop-onboarding-check"><input class="loop-onboarding-navigation" type="checkbox"> Show previous and next buttons</label>
             </div>
+            <div class="loop-onboarding-step" data-step="3" hidden>
+                <p class="loop-onboarding-description">Would you like to enable experimental lyrics? Lyrics are fetched from LRCLIB. You can change this later from the Loop menu.</p>
+                <label class="loop-onboarding-check"><input class="loop-onboarding-lyrics" type="checkbox"> Enable lyrics (experimental)</label>
+            </div>
             <div class="loop-onboarding-footer">
-                <span class="loop-onboarding-progress" aria-live="polite">1 / 3</span>
+                <span class="loop-onboarding-progress" aria-live="polite">1 / 4</span>
                 <div class="loop-onboarding-actions">
                     <button type="button" class="loop-onboarding-prev" disabled>Previous</button>
                     <button type="button" class="loop-onboarding-next">Next</button>
@@ -379,8 +388,10 @@ function showOnboarding() {
         if (save) {
             loopPreferences.autoOpenMiniPlayer = modal.querySelector(".loop-onboarding-mini-player").checked;
             loopPreferences.showNavigationButtons = modal.querySelector(".loop-onboarding-navigation").checked;
+            loopPreferences.showLyrics = modal.querySelector(".loop-onboarding-lyrics").checked;
             saveLoopPreferences();
             applyLoopPreferences();
+            if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
         }
         completeOnboarding();
         modal.remove();
@@ -420,6 +431,7 @@ function showOnboarding() {
     modal.querySelector(".loop-onboarding-config").addEventListener("click", showKawarpConfigEditor);
     modal.querySelector(".loop-onboarding-mini-player").checked = loopPreferences.autoOpenMiniPlayer !== false;
     modal.querySelector(".loop-onboarding-navigation").checked = Boolean(loopPreferences.showNavigationButtons);
+    modal.querySelector(".loop-onboarding-lyrics").checked = Boolean(loopPreferences.showLyrics);
     modal.addEventListener("keydown", (event) => { if (event.key === "Escape") finish({ save: false }); });
     renderStep();
 
@@ -598,6 +610,7 @@ function applyLoopPreferences() {
     miniPlayerBridge?.setTheme(loopPreferences.theme);
     loop.classList.toggle("loop-no-vinyl", loopPreferences.hideVinyl);
     loop.classList.toggle("loop-hide-album", !loopPreferences.showAlbum);
+    loop.classList.toggle("loop-lyrics-disabled", !loopPreferences.showLyrics);
     const vinylToggle = loop.querySelector("#loop-vinyl-toggle");
     if (vinylToggle) vinylToggle.checked = loopPreferences.hideVinyl;
     const navigationToggle = loop.querySelector("#loop-navigation-toggle");
@@ -608,6 +621,13 @@ function applyLoopPreferences() {
     if (legacyFallbackToggle) legacyFallbackToggle.checked = Boolean(loopPreferences.useLegacyFallbackArtwork);
     const albumToggle = loop.querySelector("#loop-album-toggle");
     if (albumToggle) albumToggle.checked = Boolean(loopPreferences.showAlbum);
+    const lyricsToggle = loop.querySelector("#loop-lyrics-toggle");
+    if (lyricsToggle) lyricsToggle.checked = Boolean(loopPreferences.showLyrics);
+    const lyricsPanel = loop.querySelector("#loop-lyrics-panel");
+    if (lyricsPanel && !loopPreferences.showLyrics) {
+        lyricsPanel.hidden = true;
+        braccatoLyricsRenderer?.clear();
+    }
     setTrackNavigationButtonsVisible(Boolean(loopPreferences.showNavigationButtons));
     applyArtworkPreference();
     miniPlayerBridge?.sync(getCurrentMedia());
@@ -1224,6 +1244,259 @@ function getExtensionURL(path) {
     }
 }
 
+async function getLyricsFromTrackInfo(trackId, title, artist) {
+    try {
+        const titleComposed = title.replace(/\s/g, '+');
+        const artistComposed = artist.replace(/\s/g, '+');
+        const query = `${titleComposed}+${artistComposed}`;
+        const res = await fetch(`https://lrclib.net/api/search?q=${query}`);
+        const data = await res.json();
+        // here we are gonna select the first result of the query
+        const lyricsQueryFirstResult = data?.[0];
+        if (!lyricsQueryFirstResult) {
+            console.warn("[loop.mp3] No lyrics found for track:", { trackId, title, artist });
+            return { meta: null, syncedLyrics: null, plainLyrics: null };
+        }
+        const lyricsResponse = await fetch(`https://lrclib.net/api/get/${lyricsQueryFirstResult.id}`);
+        if (!lyricsResponse.ok) throw new Error(`LRCLIB returned ${lyricsResponse.status}`);
+        const lyricsMeta = await lyricsResponse.json();
+        console.log("[loop.mp3] Fetched lyrics for track:", { trackId, title, artist, data });
+        return {
+            meta: lyricsMeta,
+            syncedLyrics: lyricsMeta?.syncedLyrics || lyricsQueryFirstResult.syncedLyrics || null,
+            plainLyrics: lyricsMeta?.plainLyrics || lyricsQueryFirstResult.plainLyrics || null,
+        };
+    } catch (error) {
+        console.warn("[loop.mp3] Could not fetch lyrics:", error);
+        showLoopNotification("Could not fetch lyrics", 3000);
+        return null;
+    }
+}
+
+const braccatoLyricsTheme = `
+    @import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap");
+
+    /* blyrics-target-scroll-pos-ratio = 0.5; */
+    .blyrics-container {
+        --blyrics-font-size: 3rem;
+        --blyrics-line-height: 1.333;
+        --blyrics-padding: 2rem;
+        --blyrics-word-wobble-transform-from: scaleX(1);
+        --blyrics-word-wobble-transform-peak: translateX(0.05em) scaleX(1.025);
+        --blyrics-word-wobble-transform-settle: translateX(0) scaleX(1);
+        --blyrics-word-wobble-transform-to: scaleX(1);
+    }
+
+    .blyrics-container .blyrics-word-highlight:not([data-long-word]) {
+        --blyrics-glow-color: var(--blyrics-highlight-color, color(display-p3 1 1 1 / 0.5));
+    }
+`;
+
+const braccatoLyricsShadowCSS = `
+    :host { display: block; width: 100%; height: 100%; color: #fff; font-family: Satoshi, system-ui, sans-serif; }
+    #loop-lyrics-view { display: block; width: 100%; height: 100%; overflow: auto; scrollbar-width: none; }
+    #loop-lyrics-view::-webkit-scrollbar { display: none; }
+    #loop-lyrics-view[hidden], #loop-lyrics-loading[hidden] { display: none; }
+    .blyrics--line:not(.blyrics--active) { filter: blur(2px); transition: filter 250ms ease; }
+    .blyrics--line.blyrics--active { filter: none; }
+    #loop-lyrics-loading { position: absolute; top: 50%; left: 50%; display: flex; align-items: center; gap: 12px; transform: translate(-50%, -50%); color: rgba(255,255,255,.7); font-size: 15px; white-space: nowrap; }
+    .loop-lyrics-spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.22); border-top-color: #fff; border-radius: 50%; animation: loop-lyrics-spin 800ms linear infinite; }
+    @keyframes loop-lyrics-spin { to { transform: rotate(360deg); } }
+    .blyrics-container { --blyrics-font-family: Satoshi, system-ui, sans-serif; --blyrics-font-size: 3rem; --blyrics-line-height: 1.333; --blyrics-padding: 2rem; --blyrics-word-wobble-transform-from: scaleX(1); --blyrics-word-wobble-transform-peak: translateX(0.05em) scaleX(1.025); --blyrics-word-wobble-transform-settle: translateX(0) scaleX(1); --blyrics-word-wobble-transform-to: scaleX(1); }
+    .blyrics-container .blyrics-word-highlight:not([data-long-word]) { --blyrics-glow-color: var(--blyrics-highlight-color, color(display-p3 1 1 1 / 0.5)); }
+`;
+
+function parseSyncedLyrics(syncedLyrics, plainLyrics, songDurationMs) {
+    const lines = String(syncedLyrics || "")
+        .split(/\r?\n/)
+        .map((line) => {
+            const match = line.match(/^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/);
+            if (!match) return null;
+            return {
+                startTimeMs: Number(match[1]) * 60_000 + Number(match[2]) * 1_000,
+                words: match[3].trim(),
+            };
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.startTimeMs - right.startTimeMs);
+
+    if (lines.length) {
+        return lines.map((line, index) => ({
+            ...line,
+            durationMs: Math.max(750, (lines[index + 1]?.startTimeMs || line.startTimeMs + 4_000) - line.startTimeMs),
+        }));
+    }
+
+    const plainLines = String(plainLyrics || "")
+        .split(/\r?\n/)
+        .map((words) => words.trim())
+        .filter(Boolean);
+
+    const lineDurationMs = Number.isFinite(songDurationMs) && songDurationMs > 0
+        ? songDurationMs / plainLines.length
+        : 4_000;
+    return plainLines.map((words, index) => ({
+        startTimeMs: index * lineDurationMs,
+        durationMs: lineDurationMs,
+        words,
+    }));
+}
+
+function loadBraccatoLyrics() {
+    if (!braccatoLyricsPromise) {
+        braccatoLyricsPromise = import(getExtensionURL("modules/braccato/renderer.js"))
+            .then(async ({ createLyricsRenderer }) => ({
+                createLyricsRenderer,
+                styles: await Promise.all(["variables.css", "lyrics.css", "instrumental.css"].map(async (file) => {
+                    const response = await fetch(getExtensionURL(`modules/braccato/styles/${file}`));
+                    if (!response.ok) throw new Error(`Could not load Braccato stylesheet ${file}`);
+                    return response.text();
+                })),
+            }));
+    }
+    return braccatoLyricsPromise;
+}
+
+function updateLoopLyrics(lyrics, empty = false) {
+    const panel = document.querySelector("#loop-lyrics-panel");
+    const host = panel?.querySelector("#loop-lyrics-host");
+    if (!panel || !host) return;
+    if (!loopPreferences.showLyrics) {
+        panel.hidden = true;
+        braccatoLyricsRenderer?.clear();
+        return;
+    }
+    const requestId = lyricsRequestId;
+    const trackId = getCurrentTrackId(getYTMPlayerRoot()) ||
+        (getCurrentMedia() ? lastTrackId : undefined);
+    const shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+    if (!shadow.querySelector("#loop-lyrics-loading")) {
+        const style = document.createElement("style");
+        style.textContent = braccatoLyricsShadowCSS;
+        shadow.appendChild(style);
+        const loading = document.createElement("div");
+        loading.id = "loop-lyrics-loading";
+        loading.setAttribute("role", "status");
+        const spinner = document.createElement("span");
+        spinner.className = "loop-lyrics-spinner";
+        spinner.setAttribute("aria-hidden", "true");
+        const loadingLabel = document.createElement("span");
+        loadingLabel.className = "loop-lyrics-loading-label";
+        loadingLabel.textContent = "Resolving lyrics";
+        loading.append(spinner, loadingLabel);
+        shadow.appendChild(loading);
+    }
+    const loading = shadow.querySelector("#loop-lyrics-loading");
+
+    if (empty) {
+        panel.hidden = true;
+        braccatoLyricsRenderer?.clear();
+        return;
+    }
+
+    panel.hidden = false;
+    loading.hidden = false;
+    if (lyrics === undefined) {
+        loading.querySelector(".loop-lyrics-loading-label").textContent = "Resolving lyrics";
+        return;
+    }
+
+    const mediaDuration = getCurrentMedia()?.duration;
+    const metadataDuration = Number(lyrics?.meta?.duration);
+    const mediaDurationMs = Number.isFinite(mediaDuration) && mediaDuration > 0
+        ? mediaDuration * 1_000
+        : 0;
+    const metadataDurationMs = Number.isFinite(metadataDuration) && metadataDuration > 0
+        ? metadataDuration * 1_000
+        : 0;
+    const parsedLyrics = parseSyncedLyrics(
+        lyrics?.syncedLyrics,
+        lyrics?.plainLyrics,
+        mediaDurationMs > 0 ? mediaDurationMs : metadataDurationMs
+    );
+    if (!parsedLyrics.length) {
+        braccatoLyricsRenderer?.clear();
+        loading.querySelector(".loop-lyrics-loading-label").textContent = "Lyrics unavailable";
+        return;
+    }
+
+    loading.querySelector(".loop-lyrics-loading-label").textContent = "Resolving lyrics";
+    loadBraccatoLyrics().then(({ createLyricsRenderer, styles }) => {
+        if (
+            requestId !== lyricsRequestId ||
+            !loopPreferences.showLyrics ||
+            trackId !== (getCurrentTrackId(getYTMPlayerRoot()) || lastTrackId)
+        ) return;
+        let view = shadow.querySelector("#loop-lyrics-view");
+        if (!view) {
+            const style = document.createElement("style");
+            style.textContent = styles.join("\n");
+            shadow.appendChild(style);
+            const themeStyle = document.createElement("style");
+            themeStyle.textContent = braccatoLyricsTheme;
+            shadow.appendChild(themeStyle);
+            view = document.createElement("div");
+            view.id = "loop-lyrics-view";
+            view.hidden = true;
+            shadow.appendChild(view);
+        }
+        if (braccatoLyricsMount !== view) {
+            braccatoLyricsRenderer?.destroy();
+            braccatoLyricsRenderer = createLyricsRenderer({
+                document,
+                window,
+                mount: view,
+                layout: "scroll",
+                host: {
+                    seek(timeS) {
+                        const media = getCurrentMedia();
+                        if (!media) {
+                            console.warn("[loop.mp3] Cannot seek lyrics because no playable media element is available.");
+                            return;
+                        }
+                        media.currentTime = Math.max(0, Math.min(timeS, media.duration));
+                        updatePlaybackControls(media);
+                    },
+                },
+            });
+            braccatoLyricsMount = view;
+        }
+        braccatoLyricsRenderer.setTheme(braccatoLyricsTheme);
+        braccatoLyricsRenderer.setLyrics(parsedLyrics, { noLyrics: false });
+        loading.hidden = true;
+        view.hidden = false;
+        updatePlaybackControls();
+    }).catch((error) => {
+        console.warn("[loop.mp3] Could not load Braccato lyrics renderer:", error);
+        loading.querySelector(".loop-lyrics-loading-label").textContent = "Lyrics could not load";
+    });
+}
+
+async function fetchLoopLyricsForCurrentTrack() {
+    const requestId = ++lyricsRequestId;
+    const trackId = getCurrentTrackId(getYTMPlayerRoot()) || lastTrackId;
+    const loop = document.querySelector("#loop");
+    const title = loop?.querySelector("#loop-track-title")?.textContent.trim();
+    const artist = loop?.querySelector("#loop-track-artist")?.textContent.trim();
+    if (!trackId || !title || !artist) {
+        updateLoopLyrics(null);
+        return;
+    }
+
+    updateLoopLyrics(undefined);
+    const lyrics = await getLyricsFromTrackInfo(trackId, title, artist);
+    if (
+        requestId !== lyricsRequestId ||
+        !loopPreferences.showLyrics ||
+        trackId !== (getCurrentTrackId(getYTMPlayerRoot()) || lastTrackId)
+    ) return;
+    updateLoopLyrics(lyrics || {
+        meta: null,
+        syncedLyrics: null,
+        plainLyrics: null,
+    });
+}
+
 function loadKawarpRenderer() {
     if (!kawarpRendererPromise) {
         kawarpRendererPromise = import(getExtensionURL("modules/kawarp.js"))
@@ -1781,19 +2054,54 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
                 ?.querySelector('a.yt-simple-endpoint[href^="browse/"]')
                 ?.textContent.trim();
         const AuthorNameComposed =
-            details.author_name.replace(/\s*[-–—]\s*Topic$/i, '').trim();        return {
-            // The player page contains context labels such as "Playing from"
-            // and "Autoplay". oEmbed is the source of truth for track metadata.
-            //title: details.title && !/^auto-?play$/i.test(details.title.trim())
-            //    ? details.title
-            //    : domInfo.title,
-            // currently only exposing the title and artist from pretty print
-            title: prettyPrintMeta?.title || details.title,
-            // these fallbacks are here so incase something explodes we still get the data
-            artist: prettyPrintMeta?.artist || AuthorNameComposed || details.author_name || domInfo.artist,
-            artistUrl: getMusicAuthorUrl(details.author_url) || liveInfo.artistUrl || domInfo.artistUrl,
-            album: details.album || oldPlayerBarAlbumName || liveInfo.album || domInfo.album,
-            albumUrl: details.album_url || liveInfo.albumUrl || domInfo.albumUrl,
+            details.author_name.replace(/\s*[-–—]\s*Topic$/i, '').trim();  
+        const title =
+            prettyPrintMeta?.title ||
+            details.title;
+
+        const artist =
+            prettyPrintMeta?.artist ||
+            AuthorNameComposed ||
+            details.author_name ||
+            domInfo.artist;
+
+        const artistUrl =
+            getMusicAuthorUrl(details.author_url) ||
+            liveInfo.artistUrl ||
+            domInfo.artistUrl;
+
+        const album =
+            details.album ||
+            oldPlayerBarAlbumName ||
+            liveInfo.album ||
+            domInfo.album;
+
+        const albumUrl =
+            details.album_url ||
+            liveInfo.albumUrl ||
+            domInfo.albumUrl;
+        let lyrics;
+        if (loopPreferences.showLyrics) {
+            lyrics = await getLyricsFromTrackInfo(trackId, title, AuthorNameComposed) || {
+                meta: null,
+                syncedLyrics: null,
+                plainLyrics: null,
+            };
+            console.log("[loop.mp3] Lyrics metadata:", lyrics.meta);
+            console.log("[loop.mp3] Synced lyrics:", lyrics.syncedLyrics);
+            console.log("[loop.mp3] Plain lyrics:", lyrics.plainLyrics);
+        }
+        return {
+            title,
+            artist,
+            artistUrl,
+            album,
+            albumUrl,
+            lyrics: lyrics ? {
+                meta: lyrics.meta,
+                syncedLyrics: lyrics.syncedLyrics,
+                plainLyrics: lyrics.plainLyrics
+            } : undefined
         };
     } catch (error) {
         showLoopNotification("Could not fetch track metadata. Information might not load correctly press F5 to try again", 4000);
@@ -1887,6 +2195,13 @@ function updateLoop(artworkURL, trackInfo) {
                         <input id="loop-legacy-fallback-toggle" type="checkbox">
                         Use legacy fallback artwork
                     </label>
+                    <label class="loop-navigation-toggle">
+                        <input id="loop-lyrics-toggle" type="checkbox">
+                        Show lyrics <span>(experimental)</span>
+                    </label>
+                    <div class="loop-setting-warning" role="note">
+                        Experimental feature. Lyrics are fetched from LRCLIB.
+                    </div>
                     <button id="loop-kawarp-config-button" class="loop-menu-action" type="button">
                         Edit Kawarp shader config
                     </button>
@@ -1928,6 +2243,9 @@ function updateLoop(artworkURL, trackInfo) {
                         <span id="loop-duration">0:00</span>
                     </div>
                 </div>
+                <section id="loop-lyrics-panel" aria-label="Synchronized lyrics" hidden>
+                    <div id="loop-lyrics-host"></div>
+                </section>
                 <div id="loop-action-dock" aria-label="Track actions">
                     <button id="loop-like-button" type="button" aria-label="Like current track" title="Like current track">
                         <i class="fa-solid fa-thumbs-up" aria-hidden="true"></i>
@@ -1997,6 +2315,12 @@ function updateLoop(artworkURL, trackInfo) {
             loopPreferences.useLegacyFallbackArtwork = event.target.checked;
             saveLoopPreferences();
             applyLoopPreferences();
+        });
+        loop.querySelector("#loop-lyrics-toggle").addEventListener("change", (event) => {
+            loopPreferences.showLyrics = event.target.checked;
+            saveLoopPreferences();
+            applyLoopPreferences();
+            if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
         });
         loop.querySelector("#loop-theme-select").addEventListener("change", (event) => {
             loopPreferences.theme = event.target.value;
@@ -2085,6 +2409,7 @@ function updateLoop(artworkURL, trackInfo) {
     syncTrackFeedbackState();
     scheduleTrackFeedbackSync();
     updateKawarpArtwork(artwork.src);
+    updateLoopLyrics(trackInfo.lyrics, Boolean(trackInfo.empty));
     updatePlaybackControls(getCurrentMedia());
     publishDiscordActivity({ force: true });
 }
@@ -2141,6 +2466,10 @@ function updatePlaybackControls(media = getCurrentMedia()) {
         currentTime.textContent = formatTime(media.currentTime);
         duration.textContent = formatTime(media.duration);
     }
+    braccatoLyricsRenderer?.tick(media ? media.currentTime : 0, {
+        isPlaying: Boolean(media && !media.paused && !media.ended),
+        playbackRate: media?.playbackRate,
+    });
     miniPlayerBridge?.sync(media);
     publishElectronMiniPlayerState();
     publishDiscordActivity();
@@ -2313,6 +2642,9 @@ function observeMediaTrackChanges(playerBar) {
         ["loadedmetadata", "durationchange", "canplay", "play", "playing", "emptied", "loadstart"].forEach((eventName) => {
             media.addEventListener(eventName, () => scheduleTrackSync(playerBar));
         });
+        ["play", "playing", "pause", "seeking", "seeked", "ratechange"].forEach((eventName) => {
+            media.addEventListener(eventName, () => updatePlaybackControls());
+        });
         const mediaObserver = new MutationObserver(() => scheduleTrackSync(playerBar));
         mediaObserver.observe(media, { attributes: true, attributeFilter: ["src"] });
     }
@@ -2375,6 +2707,7 @@ async function updateForCurrentTrack(playerBar) {
         artworkURL,
     ].join("|");
     if (!trackId && !getCurrentMedia()) {
+        lyricsRequestId += 1;
         const loop = document.getElementById("loop");
         if (!emptyScreenDismissed) {
             updateLoop(getFallbackArtwork(), {
@@ -2405,6 +2738,7 @@ async function updateForCurrentTrack(playerBar) {
     lastTrackId = trackId;
     lastTrackKey = trackSignature;
     const requestId = ++metadataRequest;
+    lyricsRequestId += 1;
     updateLoop(artworkURL, liveTrackInfo);
     syncRecordMotion();
     const trackInfo = await getTrackInfoFromTrackId(trackId, currentPlayerBar);
