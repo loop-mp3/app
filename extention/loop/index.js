@@ -671,7 +671,19 @@ function showLoopResetModal() {
                 applyLoopPreferences();
                 applyKawarpSettings(kawarpSettings);
                 close();
-                showLoopNotification("Loop data has been deleted.", 3000);
+
+                // Clear Cache Storage where the page is allowed to access it,
+                // then return to the YT Music root and reload the page.
+                try {
+                    if ("caches" in window) {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+                    }
+                } catch (error) {
+                    console.warn("[loop.mp3] Could not clear page Cache Storage:", error);
+                }
+
+                window.location.replace("/");
             } catch (error) {
                 console.error("[loop.mp3] Could not reset Loop data:", error);
                 confirm.disabled = false;
@@ -697,6 +709,10 @@ function showLoopResetModal() {
 
     confirm.focus();
 }
+
+// Expose the reset modal to the DevTools console without relying on the
+// extension's isolated-world globals.
+document.addEventListener("loop:show-reset-modal", showLoopResetModal);
 
 async function resetLoopData() {
     const localStorageArea =
@@ -2523,7 +2539,7 @@ function updateLoop(artworkURL, trackInfo) {
             panel.hidden = !panel.hidden;
             if (!panel.hidden) requestAnimationFrame(() => updateLoopMenuOverflow(panel));
         });
-        loop.querySelector("#loop-shortcuts-expand-button").addEventListener("click", (event) => {
+        loop.querySelector("#loop-shortcuts-expand-button")?.addEventListener("click", (event) => {
             event.stopPropagation();
             const panel = loop.querySelector("#loop-shortcuts-panel");
             panel.classList.toggle("loop-shortcuts-expanded");
@@ -2532,12 +2548,9 @@ function updateLoop(artworkURL, trackInfo) {
         window.addEventListener("resize", () => updateLoopMenuOverflow(
             loop.querySelector("#loop-shortcuts-panel")
         ));
-        document.addEventListener("keydown", (event) => {
-            if (!event.shiftKey || event.key !== "Delete" || event.repeat) return;
-            if (!document.getElementById("loop")) return;
-            event.preventDefault();
-            showLoopResetModal();
-        });
+        // Shift+Delete is registered globally below so it works even before
+        // Loop's UI is mounted. Do not register a second handler here.
+
         showOnboarding();
         loop.addEventListener("click", (event) => {
             const searchBar = document.querySelector("ytmusic-search-box");
@@ -3368,6 +3381,21 @@ document.addEventListener("keydown", (event) => {
         /^F([1-9]|1[0-2])$/.test(event.key)
     )) {
         window.location.replace("https://music.youtube.com");
+    }
+
+    if (
+        event.key === "Delete" &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.repeat &&
+        document.getElementById("loop")
+    ) {
+        event.preventDefault();
+        event.stopPropagation();
+        showLoopResetModal();
+        return;
     }
 
     // Ignore the synthetic J/K events generated for YouTube Music itself.
