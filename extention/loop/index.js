@@ -625,7 +625,10 @@ function showLoopResetModal() {
             </p>
             <div class="loop-reset-modal-actions">
                 <button type="button" class="loop-reset-modal-cancel">Cancel</button>
-                <button type="button" class="loop-reset-modal-confirm">Delete Loop data</button>
+                <button type="button" class="loop-reset-modal-confirm">
+                    <span class="loop-reset-modal-progress" aria-hidden="true"></span>
+                    <span class="loop-reset-modal-confirm-content">Hold to delete Loop data</span>
+                </button>
             </div>
         </div>`;
 
@@ -636,23 +639,53 @@ function showLoopResetModal() {
 
     modal.querySelector(".loop-reset-modal-close").addEventListener("click", close);
     modal.querySelector(".loop-reset-modal-cancel").addEventListener("click", close);
-    confirm.addEventListener("click", async () => {
-        confirm.disabled = true;
-        confirm.textContent = "Deleting...";
+    let resetHoldTimer;
+    let resetHolding = false;
+    let resetComplete = false;
 
-        try {
-            await resetLoopData();
-            applyLoopPreferences();
-            applyKawarpSettings(kawarpSettings);
-            close();
-            showLoopNotification("Loop data has been deleted.", 3000);
-        } catch (error) {
-            console.error("[loop.mp3] Could not reset Loop data:", error);
-            confirm.disabled = false;
-            confirm.textContent = "Delete Loop data";
-            showLoopNotification("Could not reset Loop data.", 3000);
-        }
+    const cancelResetHold = () => {
+        if (!resetHolding || resetComplete) return;
+        resetHolding = false;
+        clearTimeout(resetHoldTimer);
+        resetHoldTimer = undefined;
+        confirm.classList.remove("holding");
+        confirm.querySelector(".loop-reset-modal-confirm-content").textContent = "Hold to delete Loop data";
+    };
+
+    confirm.addEventListener("pointerdown", (event) => {
+        if (resetHolding || resetComplete) return;
+        event.preventDefault();
+        resetHolding = true;
+        confirm.classList.add("holding");
+
+        resetHoldTimer = setTimeout(async () => {
+            if (!resetHolding) return;
+
+            confirm.disabled = true;
+            confirm.querySelector(".loop-reset-modal-confirm-content").textContent = "Deleting...";
+
+            try {
+                await resetLoopData();
+                resetComplete = true;
+                resetHolding = false;
+                applyLoopPreferences();
+                applyKawarpSettings(kawarpSettings);
+                close();
+                showLoopNotification("Loop data has been deleted.", 3000);
+            } catch (error) {
+                console.error("[loop.mp3] Could not reset Loop data:", error);
+                confirm.disabled = false;
+                resetHolding = false;
+                confirm.classList.remove("holding");
+                confirm.querySelector(".loop-reset-modal-confirm-content").textContent = "Hold to delete Loop data";
+                showLoopNotification("Could not reset Loop data.", 3000);
+            }
+        }, 1200);
     });
+
+    confirm.addEventListener("pointerup", cancelResetHold);
+    confirm.addEventListener("pointerleave", cancelResetHold);
+    confirm.addEventListener("pointercancel", cancelResetHold);
 
     modal.addEventListener("click", (event) => {
         if (event.target === modal) close();
