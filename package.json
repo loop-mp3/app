@@ -1,6 +1,6 @@
 {
   "name": "loop-app",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "The application layer used by loop",
   "main": "index.js",
   "scripts": {
