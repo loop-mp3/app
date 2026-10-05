@@ -2030,10 +2030,12 @@ function updateLoopLyrics(lyrics, empty = false) {
         loading.querySelector(".loop-lyrics-loading-label").textContent = "Lyrics unavailable";
         const submitLink = document.createElement("a");
         submitLink.className = "loop-lyrics-submit-link";
-        submitLink.href = "https://lrclibup.boidu.dev/";
-        submitLink.target = "_blank";
-        submitLink.rel = "noopener noreferrer";
+        submitLink.href = "#";
         submitLink.textContent = "Submit lyrics here";
+        submitLink.addEventListener("click", (event) => {
+            event.preventDefault();
+            showLyricsSubmissionModal();
+        });
         loading.appendChild(submitLink);
         
         showLoopNotification("Lyrics unavailable", 3000);
@@ -2678,7 +2680,8 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
         const title =
             prettyPrintMeta?.title ||
             details.title;
-
+        // using this so collabs dont fuck lyrics up    
+        const titleForLyrics = details.title || prettyPrintMeta?.title;s
         const artist =
             prettyPrintMeta?.artist ||
             AuthorNameComposed ||
@@ -2702,7 +2705,7 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             domInfo.albumUrl;
         let lyrics;
         if (loopPreferences.showLyrics) {
-            lyrics = await getLyricsFromTrackInfo(trackId, title, AuthorNameComposed) || {
+            lyrics = await getLyricsFromTrackInfo(trackId, titleForLyrics, AuthorNameComposed) || {
                 meta: null,
                 syncedLyrics: null,
                 plainLyrics: null,
