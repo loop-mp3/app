@@ -2789,13 +2789,14 @@ function updateLoop(artworkURL, trackInfo) {
                     <div><kbd>Ctrl + F5</kbd> Reload Loop Session</div>
                     <div><kbd>F5</kbd> Reload Resources</div>
                     <div><kbd>Ctrl + P</kbd> Select playlists <span>(not implemented)</span></div>
+                    <div><kbd>F</kbd> Fullscreen <span>(press esc to close)</span></div>                   
                     <label class="loop-navigation-toggle">
                         <input id="loop-navigation-toggle" type="checkbox">
                         Show previous/next buttons
                     </label>
                     <label class="loop-navigation-toggle">
                         <input id="loop-background-toggle" type="checkbox" checked>
-                        Animated artwork background <span>(re-enable)</span>
+                        Enable Kwarp <span>(re-enable)</span>
                     </label>
                     <div id="loop-kawarp-warning" class="loop-kawarp-warning" role="status" >
                         Kawarp may increase GPU usage and battery drain.
@@ -2889,6 +2890,9 @@ function updateLoop(artworkURL, trackInfo) {
                     <button id="loop-screen-disable" type="button" aria-label="power off the screen while music playing" title="Turn off screen">
                     <i class="fa-solid fa-power-off" aria-hidden="true"></i>
                     </button>
+                    <button id="loop-toggle-fullscreen" type="button" aria-label="Toggle Fullscreen" title="Toggle Fullscreen">
+                    <i class="fa-solid fa-expand" aria-hidden="true"></i>                    
+                    </button>
                 </div>
             </div>`;
         document.body.appendChild(loop);
@@ -2913,6 +2917,12 @@ function updateLoop(artworkURL, trackInfo) {
                 showLoopNotification("Could not put screen to sleep", 3000);
             });
         });
+        loop.querySelector("#loop-toggle-fullscreen").addEventListener("click", () => {
+            toggleFullscreen().catch((error) => {
+                console.error("[loop.mp3] Could not toggle fullscreen:", error);
+                showLoopNotification("Could not toggle fullscreen", 3000);
+            });
+        });    
         loop.querySelector("#loop-mini-player-button").addEventListener("click", () => {
             openMiniPlayer().catch((error) => {
                 console.warn("[loop.mp3] Could not open miniplayer:", error);
@@ -4074,6 +4084,16 @@ loadKawarpRenderer().catch((error) => {
 loadKawarpSettings();
 loadLoopPreferences();
 waitForYTM(init);
+async function toggleFullscreen() {
+    const isFullscreen = document.fullscreenElement !== null;
+    if (isFullscreen) {
+        await document.exitFullscreen();
+        console.log("[loop.mp3] Exited fullscreen mode");
+    } else {
+        await document.documentElement.requestFullscreen();
+        console.log("[loop.mp3] Entered fullscreen mode");
+    }
+}
 async function checkIsSleepSupported() {
     const isSleep = await isSleepSupported();
     const screenOffButton = document.querySelector("#loop-screen-disable");
