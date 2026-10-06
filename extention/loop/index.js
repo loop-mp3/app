@@ -1843,7 +1843,8 @@ async function getLyricsFromTrackInfo(trackId, title, artist) {
             const resultLyrics = {
                 meta: lyricsMeta,
                 syncedLyrics: lyricsMeta?.instrumental && !syncedLyrics && !plainLyrics
-                    ? "[00:00.00] Instrumental only"
+                    ? `[00:00.00] Instrumental only
+[99:99.99] ${["♪", "♫", "♪"][Math.floor(Math.random() * 3)]}`
                     : syncedLyrics,
                 plainLyrics,
             };
@@ -1915,7 +1916,7 @@ function parseSyncedLyrics(syncedLyrics, plainLyrics, songDurationMs, instrument
             if (!match) return null;
             return {
                 startTimeMs: Number(match[1]) * 60_000 + Number(match[2]) * 1_000,
-                words: match[3].trim(),
+                words: match[3].trim() || ["♪", "♫", "♪"][Math.floor(Math.random() * 3)],
             };
         })
         .filter(Boolean)
@@ -1937,7 +1938,7 @@ function parseSyncedLyrics(syncedLyrics, plainLyrics, songDurationMs, instrument
         return [{
             startTimeMs: 0,
             durationMs: Number.isFinite(songDurationMs) && songDurationMs > 0 ? songDurationMs : 4_000,
-            words: "Instrumental only",
+            words: `Instrumental only`,
         }];
     }
 
