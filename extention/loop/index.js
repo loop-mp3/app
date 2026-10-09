@@ -682,6 +682,23 @@ function cacheLyrics(trackId, title, artist, duration, lyrics) {
     });
 }
 
+function removeCachedLyrics(trackId) {
+    const storage = getLyricsCacheStorage();
+    if (!storage || !trackId) return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+        storage.remove(getLyricsCacheKey(trackId), () => {
+            const error = globalThis.chrome?.runtime?.lastError || globalThis.browser?.runtime?.lastError;
+            if (error) {
+                console.warn("[loop.mp3] Could not remove cached lyrics:", error.message);
+                resolve(false);
+                return;
+            }
+            resolve(true);
+        });
+    });
+}
+
 function restoreCachedLyrics(cachedLyrics) {
     if (!cachedLyrics?.provider) return null;
     if (!cachedLyrics.syncedLyrics && !cachedLyrics.plainLyrics) return null;
@@ -780,25 +797,73 @@ function showCachedLyricsModal() {
         const lyrics = document.createElement("pre");
         lyrics.className = "loop-lyrics-cache-content";
         lyrics.textContent = entry.syncedLyrics || entry.plainLyrics || "No lyric text stored.";
-        details.append(heading, artist, metadata, lyrics);
+        const actions = document.createElement("div");
+        actions.className = "loop-lyrics-cache-actions";
+        const refresh = document.createElement("button");
+        refresh.type = "button";
+        refresh.className = "loop-lyrics-cache-refresh";
+        refresh.textContent = "Refresh lyrics";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "loop-lyrics-cache-delete";
+        remove.textContent = "Delete cache";
+        const status = document.createElement("span");
+        status.className = "loop-lyrics-cache-action-status";
+        status.setAttribute("role", "status");
+        actions.append(refresh, remove, status);
+        details.append(heading, artist, metadata, lyrics, actions);
+
+        refresh.addEventListener("click", async () => {
+            refresh.disabled = true;
+            remove.disabled = true;
+            status.textContent = "Refreshing…";
+            try {
+                const refreshedLyrics = await getLyricsFromTrackInfo(entry.trackId, entry.title, entry.artist, entry.duration, true);
+                if (!refreshedLyrics) throw new Error("No lyrics were returned.");
+                const refreshedEntry = (await getAllCachedLyrics()).find((item) => item.trackId === entry.trackId);
+                if (!refreshedEntry) throw new Error("No lyrics were returned.");
+                showDetails(refreshedEntry, button);
+            } catch (error) {
+                console.warn("[loop.mp3] Could not refresh cached lyrics:", error);
+                status.textContent = "Refresh failed.";
+                refresh.disabled = false;
+                remove.disabled = false;
+            }
+        });
+
+        remove.addEventListener("click", async () => {
+            if (!window.confirm(`Delete cached lyrics for “${entry.title || "this track"}”?`)) return;
+            refresh.disabled = true;
+            remove.disabled = true;
+            status.textContent = "Deleting…";
+            if (!await removeCachedLyrics(entry.trackId)) {
+                status.textContent = "Delete failed.";
+                refresh.disabled = false;
+                remove.disabled = false;
+                return;
+            }
+            const entries = await getAllCachedLyrics();
+            renderEntries(entries);
+        });
     };
 
-    getAllCachedLyrics().then((entries) => {
+    const renderEntries = (entries, selectedTrackId = entries[0]?.trackId) => {
         list.replaceChildren();
         if (!entries.length) {
             const empty = document.createElement("div");
             empty.className = "loop-lyrics-cache-status";
             empty.textContent = "No cached lyrics yet.";
             list.appendChild(empty);
+            details.replaceChildren(empty.cloneNode(true));
             return;
         }
 
-        entries.forEach((entry, index) => {
+        entries.forEach((entry) => {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "loop-lyrics-cache-item";
             button.setAttribute("role", "option");
-            button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+            button.setAttribute("aria-selected", entry.trackId === selectedTrackId ? "true" : "false");
             const title = document.createElement("strong");
             title.textContent = entry.title || "Untitled track";
             const subtitle = document.createElement("span");
@@ -806,9 +871,11 @@ function showCachedLyricsModal() {
             button.append(title, subtitle);
             button.addEventListener("click", () => showDetails(entry, button));
             list.appendChild(button);
-            if (index === 0) showDetails(entry, button);
+            if (entry.trackId === selectedTrackId) showDetails(entry, button);
         });
-    });
+    };
+
+    getAllCachedLyrics().then((entries) => renderEntries(entries));
 
     modal.querySelector(".loop-lyrics-cache-close").addEventListener("click", close);
     modal.addEventListener("click", (event) => {
@@ -2076,10 +2143,28 @@ async function waitForCurrentTrackDuration(timeoutMs = 3000) {
     });
 }
 
-function lyricsDurationExceedsTrack(lyricsMeta, lyricsQueryResult, trackDurationInSeconds) {
+function lyricsDurationExceedsTrack(lyricsMeta, lyricsQueryResult, trackDurationInSeconds, syncedLyrics) {
     if (!Number.isFinite(trackDurationInSeconds)) return false;
-    const lyricsDuration = Number(lyricsMeta?.duration ?? lyricsQueryResult?.duration);
-    return Number.isFinite(lyricsDuration) && Math.round(lyricsDuration) > trackDurationInSeconds;
+    const duration = Number(lyricsMeta?.duration ?? lyricsQueryResult?.duration);
+    const durationExceeds = Number.isFinite(duration) && Math.round(duration + 30) > trackDurationInSeconds;
+    if (!durationExceeds) return false;
+
+    const lastNonEmptyLine = String(syncedLyrics || "")
+        .split(/\r?\n/)
+        .reverse()
+        .find((line) => line.replace(/\[\d{1,3}:\d{2}(?:\.\d+)?\]/g, "").trim());
+    const lastLyricTimestamp = lastNonEmptyLine?.match(/\[(\d{1,3}):(\d{2})(?:\.(\d+))?\]/);
+    if (!lastLyricTimestamp) return durationExceeds;
+
+    const lyricEnd = Number(lastLyricTimestamp[1]) * 60 + Number(lastLyricTimestamp[2]) +
+        Number(`0.${lastLyricTimestamp[3] || 0}`);
+    return lyricEnd > trackDurationInSeconds;
+}
+// no longer needed its causing more inaccuracy :sob:
+function LyricsTitleMatchesTrack(lyricsMeta, lyricsQueryResult, title) {
+    const lyricsTitle = String(lyricsMeta?.title ?? lyricsQueryResult?.title ?? "").trim().toLowerCase();
+    const trackTitle = String(title ?? "").trim().toLowerCase();
+    return lyricsTitle && trackTitle && lyricsTitle === trackTitle;
 }
 
 function normalizeLyricsResponse(payload, providerId) {
@@ -2146,10 +2231,10 @@ async function getLyricsFromLrclib(trackId, title, artist, trackDurationInSecond
         const lyricsMeta = await lyricsResponse.json();
         const syncedLyrics = lyricsMeta?.syncedLyrics || lyricsQueryResult.syncedLyrics || null;
         const plainLyrics = lyricsMeta?.plainLyrics || lyricsQueryResult.plainLyrics || null;
-        if (lyricsDurationExceedsTrack(lyricsMeta, lyricsQueryResult, trackDurationInSeconds)) {
+        if (lyricsDurationExceedsTrack(lyricsMeta, lyricsQueryResult, trackDurationInSeconds, syncedLyrics)) {
             console.log(`[loop.mp3] Skipping LRCLIB search result ${resultIndex + 1} because its duration exceeds the track duration.`, {
                 trackDurationInSeconds,
-                lyricsDuration: lyricsMeta?.duration ?? lyricsQueryResult.duration,
+                lyricsDuration: (Number(lyricsMeta?.duration + 15 ?? lyricsQueryResult.duration) + 15),
             });
             continue;
         }
