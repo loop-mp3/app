@@ -249,6 +249,7 @@ let braccatoLyricsRenderer;
 let braccatoLyricsMount;
 let lyricsRequestId = 0;
 let currentTrackLyricsProvider = { trackId: null, providerId: null };
+let currentTrackWriters = [];
 let notificationTimer;
 let notificationAnimationTimer;
 let notificationAnimationFrame;
@@ -2463,7 +2464,11 @@ const braccatoLyricsShadowCSS = `
     .blyrics-container { --blyrics-font-family: Satoshi, system-ui, sans-serif; --blyrics-font-size: 3rem; --blyrics-line-height: 1.333; --blyrics-padding: 2rem; --blyrics-word-wobble-transform-from: scaleX(1); --blyrics-word-wobble-transform-peak: translateX(0.05em) scaleX(1.025); --blyrics-word-wobble-transform-settle: translateX(0) scaleX(1); --blyrics-word-wobble-transform-to: scaleX(1); }
     #loop-lyrics-view .blyrics-container { display: flex; flex-direction: column; min-height: 100%; }
     .blyrics-container .blyrics-word-highlight:not([data-long-word]) { --blyrics-glow-color: var(--blyrics-highlight-color, color(display-p3 1 1 1 / 0.5)); }
-    .blyrics-container > #loop-lyrics-footer { display: flex; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; margin: auto 0 0; padding: 12px 0 16px .25em !important; border-top: 1px solid rgba(255,255,255,.12); visibility: hidden; opacity: 0; pointer-events: none; cursor: default; transform: none !important; transition: opacity 150ms ease; }
+    .blyrics-container > #loop-track-writers { display: block; box-sizing: border-box; width: 100%; margin: 0; padding: calc(var(--blyrics-line-height) * var(--blyrics-font-size) * 1.5) .25em; color: #fff; text-align: center; opacity: 0; transform: translateY(.5em); transition: opacity 700ms cubic-bezier(.22,1,.36,1), transform 700ms cubic-bezier(.22,1,.36,1); }
+    .blyrics-container > #loop-track-writers.is-visible { opacity: 1; transform: translateY(0); }
+    .loop-track-writers-label { display: block; color: rgba(255,255,255,.72); font: 400 max(0.5em, 16px)/1.2 Satoshi, system-ui, sans-serif; margin-bottom: .45em; }
+    .loop-track-writers-names { display: block; color: #fff; font: 400 1.25em/1.25 Satoshi, system-ui, sans-serif; text-wrap: balance; }
+    .blyrics-container > #loop-lyrics-footer { display: flex; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; margin: auto 0 0; padding: calc(var(--blyrics-line-height) * var(--blyrics-font-size) * 2) 0 16px .25em !important; border-top: 1px solid rgba(255,255,255,.12); visibility: hidden; opacity: 0; pointer-events: none; cursor: default; transform: none !important; transition: opacity 150ms ease; }
     .blyrics-container > #loop-lyrics-footer.is-visible { position: sticky; bottom: 0; z-index: 2; visibility: visible; opacity: 1; pointer-events: auto; background: rgba(12, 20, 19, .92); backdrop-filter: blur(10px); }
     .blyrics-container > #loop-lyrics-footer[hidden] { display: none; }
     .loop-lyrics-footer-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: 34px; min-width: 0; border: 1px solid rgba(255,255,255,.24); border-radius: 10px; padding: 0 13px; color: rgba(255,255,255,.86); background: rgba(255,255,255,.08); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
@@ -2588,6 +2593,11 @@ function syncLyricsFooterVisibility(shadow) {
     const endThreshold = Math.max(footer.offsetHeight + 24, view.clientHeight * 0.08);
     const reachedEnd = view.scrollTop + view.clientHeight >= view.scrollHeight - endThreshold;
     footer.classList.toggle("is-visible", reachedEnd);
+    const writers = shadow.querySelector("#loop-track-writers");
+    if (writers) {
+        writers.classList.toggle("is-visible", reachedEnd);
+        writers.hidden = !reachedEnd;
+    }
 }
 
 function bindLyricsFooterScroll(shadow) {
@@ -2597,10 +2607,33 @@ function bindLyricsFooterScroll(shadow) {
     view.addEventListener("scroll", () => syncLyricsFooterVisibility(shadow), { passive: true });
 }
 
-function updateLyricsFooter(shadow, lyrics) {
+function updateLyricsFooter(shadow, lyrics, songwriters = []) {
     const footer = ensureLyricsFooter(shadow);
     const lyricsContainer = shadow.querySelector(".blyrics-container");
-    if (lyricsContainer) lyricsContainer.appendChild(footer);
+    if (lyricsContainer) {
+        lyricsContainer.appendChild(footer);
+        let writers = lyricsContainer.querySelector("#loop-track-writers");
+        if (!writers) {
+            writers = document.createElement("div");
+            writers.id = "loop-track-writers";
+            writers.hidden = true;
+            lyricsContainer.insertBefore(writers, footer);
+        }
+        const safeNames = songwriters
+            .filter(Boolean)
+            .map((name) => String(name).replace(/[&<>"']/g, (character) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            }[character])))
+            .join(", ");
+        writers.innerHTML = safeNames
+            ? '<span class="loop-track-writers-label">Written by</span><span class="loop-track-writers-names">' + safeNames + "</span>"
+            : "";
+        writers.hidden = !safeNames;
+    }
     bindLyricsFooterScroll(shadow);
     const sourceLink = footer.querySelector("a");
     const providerSelect = footer.querySelector("select");
@@ -2624,7 +2657,7 @@ function updateLyricsFooter(shadow, lyrics) {
     syncLyricsFooterVisibility(shadow);
 }
 
-function updateLoopLyrics(lyrics, empty = false) {
+function updateLoopLyrics(lyrics, empty = false, songwriters = currentTrackWriters) {
     const panel = document.querySelector("#loop-lyrics-panel");
     const host = panel?.querySelector("#loop-lyrics-host");
     if (!panel || !host) return;
@@ -2753,7 +2786,7 @@ function updateLoopLyrics(lyrics, empty = false) {
         braccatoLyricsRenderer.setLyrics(parsedLyrics, { noLyrics: false });
         loading.hidden = true;
         view.hidden = false;
-        updateLyricsFooter(shadow, lyrics);
+        updateLyricsFooter(shadow, lyrics, songwriters);
         updatePlaybackControls();
     }).catch((error) => {
         console.warn("[loop.mp3] Could not load Braccato lyrics renderer:", error);
@@ -3275,6 +3308,93 @@ function getMusicAuthorUrl(authorUrl) {
     }
 }
 
+// using the browse endpoint to get the writers (yes i dug through the ytm network logs manually, what iam i insane? yes fortunately and i have no life i stay in my house i never go outside i fear sunlight once i accidently touched grass and was hospitalised for 3 weeks)
+async function getTrackWriterCredits(browseId) {
+    if (!browseId) {
+        console.error(`[loop.mp3] No browseId provided for track credits retrieval.`);
+        return [];
+    }
+    try {
+        const response = await fetch(
+            "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+            {
+                method: "POST",
+                credentials: "include",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    context: {
+                        client: {
+                            hl: "en",
+                            gl: "IN",
+                            clientName: "WEB_REMIX",
+                            clientVersion: "1.20261006.10.00"
+                        }
+                    },
+                    browseId
+                })
+            }
+        );
+
+        if (!response.ok) {
+            console.error(
+                "[loop.mp3] Track credits request failed:",
+                response.status
+            );
+            return [];
+        }
+
+        const data = await response.json();
+        return getTrackWritersFromBrowse(data);
+    } catch (error) {
+        console.error(
+            "[loop.mp3] Track credits retrieval failed:",
+            error
+        );
+        return [];
+    }
+}
+
+// this is the selector that gets the writers name apparently ytm is wasting our precious ram in saving 100's of lines of useless json even in this ram cris 
+function getTrackWritersFromBrowse(data) {
+    const actions = data.onResponseReceivedActions ?? [];
+
+    for (const action of actions) {
+        const sections =
+            action.openPopupAction
+                ?.popup
+                ?.dismissableDialogRenderer
+                ?.sections ?? [];
+
+        const creditsSection = sections.find(section => {
+            const renderer =
+                section.dismissableDialogContentSectionRenderer;
+
+            return renderer?.title?.runs
+                ?.some(run => run.text === "Written by");
+        });
+
+        if (!creditsSection) continue;
+
+        const runs =
+            creditsSection.dismissableDialogContentSectionRenderer
+                .subtitle?.runs ?? [];
+
+        return [...new Set(
+            runs
+                .map(run => run.text)
+                .join("")
+                .split("\n")
+                .map(name => name.trim())
+                .filter(Boolean)
+        )];
+    }
+
+    return [];
+}
+
+
 // Use the player endpoint to retrieve more accurate track metadata.
 const prettyPrintMetaCache = new Map();
 
@@ -3361,7 +3481,11 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             AuthorNameComposed ||
             details.author_name ||
             domInfo.artist;
-
+            // its an array just fetching them to test
+            // this is the browseId ytm uses for some reason its just appending the trackId to the prefix MPTC for some fucking reason
+        const browseId = `MPTC${trackId}`;
+        const TrackWriters = await getTrackWriterCredits(browseId);
+        console.log(`[loop.mp3] Track Writers:`, TrackWriters);
         const artistUrl =
             getMusicAuthorUrl(details.author_url) ||
             liveInfo.artistUrl ||
@@ -3399,6 +3523,7 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             artistUrl,
             album,
             albumUrl,
+            TrackWriters,
             lyrics: lyrics ? {
                 meta: lyrics.meta,
                 syncedLyrics: lyrics.syncedLyrics,
@@ -3434,6 +3559,8 @@ function goBackToNormal() {
 
 function updateLoop(artworkURL, trackInfo) {
     loopVisible = true;
+    if (Array.isArray(trackInfo.TrackWriters)) currentTrackWriters = trackInfo.TrackWriters;
+    if (trackInfo.empty) currentTrackWriters = [];
     let loop = document.getElementById("loop");
     if (!loop) {
         loop = document.createElement("div");
@@ -3802,7 +3929,7 @@ function updateLoop(artworkURL, trackInfo) {
     syncTrackFeedbackState();
     scheduleTrackFeedbackSync();
     updateKawarpArtwork(artwork.src);
-    updateLoopLyrics(trackInfo.lyrics, Boolean(trackInfo.empty));
+    updateLoopLyrics(trackInfo.lyrics, Boolean(trackInfo.empty), currentTrackWriters);
     updatePlaybackControls(getCurrentMedia());
     publishDiscordActivity({ force: true });
 }
