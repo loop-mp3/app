@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const DiscordRPC = require("discord-rpc");
 const { execFile } = require("child_process");
+const { updateLoopExtension } = require("./loop-extension-updater");
 
 const EXTENSIONS_DIR = app.isPackaged
     ? path.join(process.resourcesPath, "extention")
@@ -327,6 +328,12 @@ async function loadExtensions() {
 }
 
 async function createWindow() {
+    try {
+        await updateLoopExtension(EXTENSIONS_DIR);
+    } catch (error) {
+        console.warn("[ext] Loop update check failed; using the installed extension:", error.message);
+    }
+
     // Load extensions BEFORE loading YouTube Music.
     await loadExtensions();
 
