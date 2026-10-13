@@ -235,6 +235,9 @@ let loopPreferences = {
     useLegacyFallbackArtwork: false,
     showAlbum: false,
     showLyrics: false,
+    showWriterCredits: true,
+    useLyricsCache: true,
+    useGrooveOverrides: true,
     lyricsProviderOrder: ["groove", "lrclib"],
     loopUpdateInterval: 500,
     volume: 1,
@@ -267,11 +270,14 @@ const kawarpConfigKey = "loop.mp3.kawarp-config";
 const kawarpCustomPresetsKey = "loop.mp3.kawarp-custom-presets";
 const lyricsCacheKeyPrefix = "lyrics_";
 const defaultUpdateURL = "https://loop.mizucode.qzz.io/update";
+const grooveEditorURL = "https://loop.mizucode.qzz.io/groove/";
 const onboardingChangelogURL = "https://raw.githubusercontent.com/loop-mp3/loop/refs/heads/main/CHANGELOG.md";
 const lyricsProviders = [
     { id: "groove", label: "Groove", endpoint: "https://groove.mizucode.qzz.io/api/v1/track" },
     { id: "lrclib", label: "LRCLIB", endpoint: "https://lrclib.net/api/search" },
+    { id: "groove-dev", label: "Groove (dev)", endpoint: "http://127.0.0.1:8787/api/v1/track" },
 ];
+const defaultLyricsProviderIds = ["groove", "lrclib"];
 
 function getLyricsProviderOrder() {
     const storedOrder = Array.isArray(loopPreferences.lyricsProviderOrder)
@@ -280,13 +286,13 @@ function getLyricsProviderOrder() {
     const knownIds = new Set(lyricsProviders.map((provider) => provider.id));
     return [...new Set([
         ...storedOrder.filter((providerId) => knownIds.has(providerId)),
-        ...lyricsProviders.map((provider) => provider.id),
+        ...defaultLyricsProviderIds,
     ])];
 }
 
 function setLyricsProviderOrder(providerId) {
     const order = getLyricsProviderOrder();
-    if (!order.includes(providerId)) return;
+    if (!lyricsProviders.some((provider) => provider.id === providerId)) return;
     loopPreferences.lyricsProviderOrder = [providerId, ...order.filter((id) => id !== providerId)];
     saveLoopPreferences();
     applyLoopPreferences();
@@ -449,6 +455,7 @@ function showOnboarding() {
             <div class="loop-onboarding-step" data-step="3" hidden>
                 <p class="loop-onboarding-description">Would you like to enable experimental lyrics? Lyrics are fetched from LRCLIB. You can change this later from the Loop menu.</p>
                 <label class="loop-onboarding-check"><input class="loop-onboarding-lyrics" type="checkbox"> Enable lyrics (experimental)</label>
+                <label class="loop-onboarding-check"><input class="loop-onboarding-writer-credits" type="checkbox"> Show writer credits</label>
             </div>
             <div class="loop-onboarding-footer">
                 <span class="loop-onboarding-progress" aria-live="polite">1 / 4</span>
@@ -471,6 +478,7 @@ function showOnboarding() {
             loopPreferences.autoOpenMiniPlayer = modal.querySelector(".loop-onboarding-mini-player").checked;
             loopPreferences.showNavigationButtons = modal.querySelector(".loop-onboarding-navigation").checked;
             loopPreferences.showLyrics = modal.querySelector(".loop-onboarding-lyrics").checked;
+            loopPreferences.showWriterCredits = modal.querySelector(".loop-onboarding-writer-credits").checked;
             saveLoopPreferences();
             applyLoopPreferences();
             if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
@@ -514,6 +522,7 @@ function showOnboarding() {
     modal.querySelector(".loop-onboarding-mini-player").checked = loopPreferences.autoOpenMiniPlayer !== false;
     modal.querySelector(".loop-onboarding-navigation").checked = Boolean(loopPreferences.showNavigationButtons);
     modal.querySelector(".loop-onboarding-lyrics").checked = Boolean(loopPreferences.showLyrics);
+    modal.querySelector(".loop-onboarding-writer-credits").checked = loopPreferences.showWriterCredits !== false;
     modal.addEventListener("keydown", (event) => { if (event.key === "Escape") finish({ save: false }); });
     renderStep();
 
@@ -725,6 +734,7 @@ function cacheLyrics(trackId, title, artist, duration, lyrics) {
             : Number.isFinite(responseDuration) ? responseDuration : null,
         syncedLyrics: lyrics.syncedLyrics || null,
         plainLyrics: lyrics.plainLyrics || null,
+        override: lyrics.meta.override === true,
         cachedAt: Date.now(),
     };
 
@@ -763,6 +773,7 @@ function restoreCachedLyrics(cachedLyrics) {
             title: cachedLyrics.title,
             artist: cachedLyrics.artist,
             duration: cachedLyrics.duration,
+            override: cachedLyrics.override === true,
             cachedAt: cachedLyrics.cachedAt,
         },
         syncedLyrics: cachedLyrics.syncedLyrics || null,
@@ -1474,6 +1485,9 @@ async function resetLoopData() {
         useLegacyFallbackArtwork: false,
         showAlbum: false,
         showLyrics: false,
+        showWriterCredits: true,
+        useLyricsCache: true,
+        useGrooveOverrides: true,
         lyricsProviderOrder: ["groove", "lrclib"],
         loopUpdateInterval: defaultLoopUpdateInterval,
         volume: 1,
@@ -1511,11 +1525,20 @@ function applyLoopPreferences() {
     if (albumToggle) albumToggle.checked = Boolean(loopPreferences.showAlbum);
     const lyricsToggle = loop.querySelector("#loop-lyrics-toggle");
     if (lyricsToggle) lyricsToggle.checked = Boolean(loopPreferences.showLyrics);
+    const writerCreditsToggle = loop.querySelector("#loop-writer-credits-toggle");
+    if (writerCreditsToggle) writerCreditsToggle.checked = loopPreferences.showWriterCredits !== false;
+    const lyricsCacheToggle = loop.querySelector("#loop-lyrics-cache-toggle");
+    if (lyricsCacheToggle) lyricsCacheToggle.checked = loopPreferences.useLyricsCache !== false;
+    const grooveOverridesToggle = loop.querySelector("#loop-groove-overrides-toggle");
+    if (grooveOverridesToggle) grooveOverridesToggle.checked = loopPreferences.useGrooveOverrides !== false;
     updateLoopPollingPreferenceUI();
     const lyricsProviderSelect = loop.querySelector("#loop-lyrics-provider-select");
     if (lyricsProviderSelect) {
         const order = getLyricsProviderOrder();
-        lyricsProviderSelect.replaceChildren(...order.map((providerId, index) => {
+        const displayOrder = [...order, ...lyricsProviders
+            .map((provider) => provider.id)
+            .filter((providerId) => !order.includes(providerId))];
+        lyricsProviderSelect.replaceChildren(...displayOrder.map((providerId, index) => {
             const provider = lyricsProviders.find((entry) => entry.id === providerId);
             const option = new Option(`${provider.label} (priority ${index + 1})`, provider.id);
             return option;
@@ -2239,7 +2262,7 @@ function normalizeLyricsResponse(payload, providerId) {
         .filter((candidate) => candidate && typeof candidate === "object");
     const source = candidates.find((candidate) =>
         candidate.syncedLyrics || candidate.synced_lyrics || candidate.lrc ||
-        candidate.plainLyrics || candidate.plain_lyrics || candidate.lyrics
+        candidate.plainLyrics || candidate.plain_lyrics || candidate.lyrics || candidate.instrumental === true
     );
     if (!source) return null;
     const nestedLyrics = source.lyrics && typeof source.lyrics === "object" ? source.lyrics : {};
@@ -2265,15 +2288,22 @@ function normalizeLyricsResponse(payload, providerId) {
 
 async function getLyricsFromGroove(trackId, title, artist, trackDurationInSeconds) {
     if (!trackId) throw new Error("Groove requires a track ID");
-    const query = Number.isFinite(trackDurationInSeconds)
-        ? `?duration=${encodeURIComponent(trackDurationInSeconds)}`
-        : "";
-    const response = await fetch(`${lyricsProviders[0].endpoint}/${encodeURIComponent(trackId)}${query}`, {
+    const queryParams = new URLSearchParams();
+    if (Number.isFinite(trackDurationInSeconds)) {
+        queryParams.set("duration", String(trackDurationInSeconds));
+    }
+    if (loopPreferences.useGrooveOverrides !== false) {
+        queryParams.set("overrides", "true");
+    }
+    const query = queryParams.toString();
+    const response = await fetch(`${lyricsProviders[0].endpoint}/${encodeURIComponent(trackId)}${query ? `?${query}` : ""}`, {
         cache: "no-store",
     });
     if (!response.ok) throw new Error(`Groove returned ${response.status}`);
     const lyrics = normalizeLyricsResponse(await response.json(), "groove");
     if (!lyrics) throw new Error("Groove returned no usable lyrics");
+    // Keep override-enabled and override-disabled cache entries distinguishable.
+    lyrics.meta.override = loopPreferences.useGrooveOverrides !== false;
     return lyrics;
 }
 
@@ -2334,8 +2364,11 @@ async function getLyricsFromTrackInfo(trackId, title, artist, trackDurationInSec
         : baseOrder;
 
     if (!forceRefresh) {
-        const cachedLyrics = restoreCachedLyrics(await getCachedLyrics(trackId));
-        if (cachedLyrics && (!preferredProvider || cachedLyrics.meta.provider === preferredProvider)) {
+        const cachedLyrics = loopPreferences.useLyricsCache !== false
+            ? restoreCachedLyrics(await getCachedLyrics(trackId))
+            : null;
+        if (cachedLyrics && (!preferredProvider || cachedLyrics.meta.provider === preferredProvider) &&
+            (loopPreferences.useGrooveOverrides !== false || cachedLyrics.meta.override !== true)) {
             currentTrackLyricsProvider = { trackId, providerId: cachedLyrics.meta.provider };
             console.log("[loop.mp3] Using cached lyrics:", { trackId, provider: cachedLyrics.meta.provider });
             return cachedLyrics;
@@ -2352,7 +2385,9 @@ async function getLyricsFromTrackInfo(trackId, title, artist, trackDurationInSec
                 console.warn(`[loop.mp3] ${providerId} had no lyrics after ${(performance.now() - providerStartedAt).toFixed(1)} ms; trying the next provider.`);
                 continue;
             }
-            await cacheLyrics(trackId, title, artist, trackDurationInSeconds, lyrics);
+            if (loopPreferences.useLyricsCache !== false) {
+                await cacheLyrics(trackId, title, artist, trackDurationInSeconds, lyrics);
+            }
             console.log(`[loop.mp3] Fetched lyrics from ${providerId} in ${(performance.now() - providerStartedAt).toFixed(1)} ms (total ${(performance.now() - resolutionStartedAt).toFixed(1)} ms):`, { trackId, title, artist });
             return lyrics;
         } catch (error) {
@@ -2451,9 +2486,8 @@ const braccatoLyricsTheme = `
 
 const braccatoLyricsShadowCSS = `
     :host { display: block; width: 100%; height: 100%; color: #fff; font-family: Satoshi, system-ui, sans-serif; }
-    #loop-lyrics-shell { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+    #loop-lyrics-shell { position: relative; display: block; width: 100%; height: 100%; min-height: 0; }
     #loop-lyrics-view { display: block; width: 100%; height: 100%; overflow: auto; scrollbar-width: none; }
-    #loop-lyrics-shell #loop-lyrics-view { flex: 1 1 auto; min-height: 0; height: auto; }
     #loop-lyrics-view::-webkit-scrollbar { display: none; }
     #loop-lyrics-view[hidden], #loop-lyrics-loading[hidden], #loop-lyrics-footer[hidden] { display: none; }
     .blyrics--line:not(.blyrics--active) { filter: blur(2px); transition: filter 250ms ease; }
@@ -2464,17 +2498,19 @@ const braccatoLyricsShadowCSS = `
     .blyrics-container { --blyrics-font-family: Satoshi, system-ui, sans-serif; --blyrics-font-size: 3rem; --blyrics-line-height: 1.333; --blyrics-padding: 2rem; --blyrics-word-wobble-transform-from: scaleX(1); --blyrics-word-wobble-transform-peak: translateX(0.05em) scaleX(1.025); --blyrics-word-wobble-transform-settle: translateX(0) scaleX(1); --blyrics-word-wobble-transform-to: scaleX(1); }
     #loop-lyrics-view .blyrics-container { display: flex; flex-direction: column; min-height: 100%; }
     .blyrics-container .blyrics-word-highlight:not([data-long-word]) { --blyrics-glow-color: var(--blyrics-highlight-color, color(display-p3 1 1 1 / 0.5)); }
-    .blyrics-container > #loop-track-writers { display: block; box-sizing: border-box; width: 100%; margin: 0; padding: calc(var(--blyrics-line-height) * var(--blyrics-font-size) * 1.5) .25em; color: #fff; text-align: center; opacity: 0; transform: translateY(.5em); transition: opacity 700ms cubic-bezier(.22,1,.36,1), transform 700ms cubic-bezier(.22,1,.36,1); }
-    .blyrics-container > #loop-track-writers.is-visible { opacity: 1; transform: translateY(0); }
-    .loop-track-writers-label { display: block; color: rgba(255,255,255,.72); font: 400 max(0.5em, 16px)/1.2 Satoshi, system-ui, sans-serif; margin-bottom: .45em; }
+    .loop-track-writers-label { display: block; color: rgba(255,255,255,.72); font: 400 16px/1.2 Satoshi, system-ui, sans-serif; margin-bottom: .45em; }
     .loop-track-writers-names { display: block; color: #fff; font: 400 1.25em/1.25 Satoshi, system-ui, sans-serif; text-wrap: balance; }
-    .blyrics-container > #loop-lyrics-footer { display: flex; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; margin: auto 0 0; padding: calc(var(--blyrics-line-height) * var(--blyrics-font-size) * 2) 0 16px .25em !important; border-top: 1px solid rgba(255,255,255,.12); visibility: hidden; opacity: 0; pointer-events: none; cursor: default; transform: none !important; transition: opacity 150ms ease; }
-    .blyrics-container > #loop-lyrics-footer.is-visible { position: sticky; bottom: 0; z-index: 2; visibility: visible; opacity: 1; pointer-events: auto; background: rgba(12, 20, 19, .92); backdrop-filter: blur(10px); }
-    .blyrics-container > #loop-lyrics-footer[hidden] { display: none; }
+    #loop-lyrics-footer { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; margin: 0; padding: 12px 0 16px .25em !important; border-top: 1px solid rgba(255,255,255,.12); visibility: hidden; opacity: 0; pointer-events: none; cursor: default; transform: none !important; transition: opacity 150ms ease; }
+    #loop-lyrics-footer.is-visible { visibility: visible; opacity: 1; pointer-events: auto; background: rgba(12, 20, 19, .92); backdrop-filter: blur(10px); }
+    .loop-lyrics-footer-actions { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+    #loop-track-writers { position: absolute; right: 0; bottom: 85px; left: 0; z-index: 2; display: block; box-sizing: border-box; width: 100%; margin: 0; padding: 0 0 12px; color: #fff; text-align: center; font-size: 2.5rem; opacity: 0; transform: translateY(.5em); transition: opacity 2000ms cubic-bezier(.22,1,.36,1), transform 2000ms cubic-bezier(.22,1,.36,1); }
+    #loop-track-writers.is-visible { opacity: 1; transform: translateY(0); }
+    #loop-lyrics-footer[hidden] { display: none; }
     .loop-lyrics-footer-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: 34px; min-width: 0; border: 1px solid rgba(255,255,255,.24); border-radius: 10px; padding: 0 13px; color: rgba(255,255,255,.86); background: rgba(255,255,255,.08); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
     .loop-lyrics-footer-button .fa-solid { font-family: "Font Awesome 6 Free"; font-weight: 900; }
     .loop-lyrics-footer-button .fa-arrows-rotate::before { content: "\\f021"; }
     .loop-lyrics-footer-button .fa-up-right-from-square::before { content: "\\f35d"; }
+    .loop-lyrics-submit-link, .loop-lyrics-instrumental-link { display: inline-block; margin: 8px 8px 0 0; color: rgba(255,255,255,.82); text-decoration: underline; cursor: pointer; }
     .loop-lyrics-footer-button:hover, .loop-lyrics-footer-button:focus-visible { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.16); color: #fff; }
     .loop-lyrics-footer-button:disabled { cursor: wait; opacity: .55; }
     .loop-lyrics-footer-provider { height: 34px; max-width: 115px; border: 1px solid rgba(255,255,255,.24); border-radius: 10px; padding: 0 8px; color: rgba(255,255,255,.86); background: rgba(255,255,255,.08); font: inherit; font-size: 12px; cursor: pointer; }
@@ -2526,6 +2562,43 @@ function parseSyncedLyrics(syncedLyrics, plainLyrics, songDurationMs, instrument
     }));
 }
 
+function normalizeWriterCreditText(value) {
+    return String(value || "")
+        .replace(/^written\s+by\s*/i, "")
+        .replace(/&/g, " and ")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+        .toLocaleLowerCase();
+}
+
+function removeTrailingWriterCreditLines(lines, songwriters) {
+    const names = songwriters.filter(Boolean).map((name) => String(name).trim()).filter(Boolean);
+    if (!names.length || !lines.length) return lines;
+
+    const fullCredit = normalizeWriterCreditText(names.join(" "));
+    const individualCredits = new Set(names.map(normalizeWriterCreditText));
+    let end = lines.length;
+    while (end > 0) {
+        const rawLine = String(lines[end - 1].words || "").trim();
+        const line = normalizeWriterCreditText(rawLine);
+        if (!line) {
+            end--;
+            continue;
+        }
+        if (
+            line === fullCredit ||
+            line.startsWith(fullCredit + " ") ||
+            individualCredits.has(line) ||
+            /^written\s+by\b/i.test(rawLine)
+        ) {
+            end--;
+            continue;
+        }
+        break;
+    }
+    return end === lines.length ? lines : lines.slice(0, end);
+}
+
 function loadBraccatoLyrics() {
     if (!braccatoLyricsPromise) {
         braccatoLyricsPromise = import(getExtensionURL("modules/braccato/renderer.js"))
@@ -2563,13 +2636,22 @@ function ensureLyricsFooter(shadow) {
     });
 
     const sourceLink = document.createElement("a");
-    sourceLink.className = "loop-lyrics-footer-button";
+    sourceLink.className = "loop-lyrics-footer-button loop-lyrics-source-link";
     sourceLink.target = "_blank";
     sourceLink.rel = "noopener noreferrer";
     sourceLink.setAttribute("aria-label", "Open lyrics sync");
     sourceLink.title = "Open lyrics sync";
     sourceLink.innerHTML = '<i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i><span>Open lyrics sync</span>';
     sourceLink.hidden = true;
+
+    const wrongLyricsLink = document.createElement("a");
+    wrongLyricsLink.className = "loop-lyrics-footer-button loop-lyrics-wrong-link";
+    wrongLyricsLink.target = "_blank";
+    wrongLyricsLink.rel = "noopener noreferrer";
+    wrongLyricsLink.href = grooveEditorURL;
+    wrongLyricsLink.setAttribute("aria-label", "Report wrong lyrics");
+    wrongLyricsLink.title = "Correct these lyrics in Groove";
+    wrongLyricsLink.innerHTML = '<span>Wrong lyrics?</span>';
 
     const providerSelect = document.createElement("select");
     providerSelect.className = "loop-lyrics-footer-provider";
@@ -2581,7 +2663,10 @@ function ensureLyricsFooter(shadow) {
         fetchLoopLyricsForCurrentTrack();
     });
 
-    footer.append(reloadButton, providerSelect, sourceLink);
+    const actions = document.createElement("div");
+    actions.className = "loop-lyrics-footer-actions";
+    actions.append(reloadButton, providerSelect, sourceLink, wrongLyricsLink);
+    footer.append(actions);
     shadow.appendChild(footer);
     return footer;
 }
@@ -2591,7 +2676,12 @@ function syncLyricsFooterVisibility(shadow) {
     const footer = shadow.querySelector("#loop-lyrics-footer");
     if (!view || !footer || footer.hidden) return;
     const endThreshold = Math.max(footer.offsetHeight + 24, view.clientHeight * 0.08);
-    const reachedEnd = view.scrollTop + view.clientHeight >= view.scrollHeight - endThreshold;
+    const lyricLines = view.querySelectorAll(".blyrics-container > .blyrics--line");
+    const lastLyric = lyricLines[lyricLines.length - 1];
+    const lastLyricFocused = lastLyric?.classList.contains("blyrics--active") ||
+        lastLyric?.getAttribute("aria-current") === "true";
+    const reachedEnd = Boolean(lastLyricFocused) ||
+        view.scrollTop + view.clientHeight >= view.scrollHeight - endThreshold;
     footer.classList.toggle("is-visible", reachedEnd);
     const writers = shadow.querySelector("#loop-track-writers");
     if (writers) {
@@ -2605,21 +2695,25 @@ function bindLyricsFooterScroll(shadow) {
     if (!view || view.dataset.loopLyricsFooterScrollBound) return;
     view.dataset.loopLyricsFooterScrollBound = "true";
     view.addEventListener("scroll", () => syncLyricsFooterVisibility(shadow), { passive: true });
+    const lyricsContainer = view.querySelector(".blyrics-container");
+    if (lyricsContainer) {
+        const observer = new MutationObserver(() => syncLyricsFooterVisibility(shadow));
+        observer.observe(lyricsContainer, { subtree: true, attributes: true, attributeFilter: ["class", "aria-current"] });
+    }
 }
 
-function updateLyricsFooter(shadow, lyrics, songwriters = []) {
+function updateLyricsFooter(shadow, lyrics, songwriters = [], hasSungLyrics = true) {
     const footer = ensureLyricsFooter(shadow);
     const lyricsContainer = shadow.querySelector(".blyrics-container");
     if (lyricsContainer) {
-        lyricsContainer.appendChild(footer);
-        let writers = lyricsContainer.querySelector("#loop-track-writers");
+        let writers = shadow.querySelector("#loop-track-writers");
         if (!writers) {
             writers = document.createElement("div");
             writers.id = "loop-track-writers";
-            writers.hidden = true;
-            lyricsContainer.insertBefore(writers, footer);
+            footer.parentElement.insertBefore(writers, footer);
         }
-        const safeNames = songwriters
+        const safeNames = loopPreferences.showWriterCredits !== false && !lyrics?.meta?.instrumental && hasSungLyrics
+            ? songwriters
             .filter(Boolean)
             .map((name) => String(name).replace(/[&<>"']/g, (character) => ({
                 "&": "&amp;",
@@ -2628,14 +2722,15 @@ function updateLyricsFooter(shadow, lyrics, songwriters = []) {
                 '"': "&quot;",
                 "'": "&#39;",
             }[character])))
-            .join(", ");
+            .join(", ")
+            : "";
         writers.innerHTML = safeNames
             ? '<span class="loop-track-writers-label">Written by</span><span class="loop-track-writers-names">' + safeNames + "</span>"
             : "";
         writers.hidden = !safeNames;
     }
     bindLyricsFooterScroll(shadow);
-    const sourceLink = footer.querySelector("a");
+    const sourceLink = footer.querySelector(".loop-lyrics-source-link");
     const providerSelect = footer.querySelector("select");
     if (providerSelect) {
         const selectedProvider = lyrics?.meta?.provider || getLyricsProviderOrder()[0];
@@ -2653,6 +2748,8 @@ function updateLyricsFooter(shadow, lyrics, songwriters = []) {
             : "");
     sourceLink.hidden = !sourceURL;
     if (sourceURL) sourceLink.href = sourceURL;
+    const wrongLyricsLink = footer.querySelector(".loop-lyrics-wrong-link");
+    if (wrongLyricsLink) wrongLyricsLink.href = grooveEditorURL;
     footer.hidden = false;
     syncLyricsFooterVisibility(shadow);
 }
@@ -2701,6 +2798,7 @@ function updateLoopLyrics(lyrics, empty = false, songwriters = currentTrackWrite
     footer.hidden = true;
     shadow.querySelector("#loop-lyrics-view")?.setAttribute("hidden", "");
     loading.querySelector(".loop-lyrics-submit-link")?.remove();
+    loading.querySelector(".loop-lyrics-instrumental-link")?.remove();
     if (lyrics === undefined) {
         loading.querySelector(".loop-lyrics-loading-label").textContent = "Resolving lyrics";
         return;
@@ -2714,12 +2812,12 @@ function updateLoopLyrics(lyrics, empty = false, songwriters = currentTrackWrite
     const metadataDurationMs = Number.isFinite(metadataDuration) && metadataDuration > 0
         ? metadataDuration * 1_000
         : 0;
-    const parsedLyrics = parseSyncedLyrics(
+    const parsedLyrics = removeTrailingWriterCreditLines(parseSyncedLyrics(
         lyrics?.syncedLyrics,
         lyrics?.plainLyrics,
         mediaDurationMs > 0 ? mediaDurationMs : metadataDurationMs,
         lyrics?.meta?.instrumental === true
-    );
+    ), songwriters);
     if (!parsedLyrics.length) {
         braccatoLyricsRenderer?.clear();
         loading.querySelector(".loop-lyrics-loading-label").textContent = "Lyrics unavailable";
@@ -2731,7 +2829,13 @@ function updateLoopLyrics(lyrics, empty = false, songwriters = currentTrackWrite
             event.preventDefault();
             showLyricsSubmissionModal();
         });
-        loading.appendChild(submitLink);
+        const instrumentalLink = document.createElement("a");
+        instrumentalLink.className = "loop-lyrics-instrumental-link";
+        instrumentalLink.href = grooveEditorURL;
+        instrumentalLink.target = "_blank";
+        instrumentalLink.rel = "noopener noreferrer";
+        instrumentalLink.textContent = "Did we miss the lyrics?";
+        loading.append(submitLink, instrumentalLink);
         
         showLoopNotification("Lyrics unavailable", 3000);
         return;
@@ -2783,10 +2887,20 @@ function updateLoopLyrics(lyrics, empty = false, songwriters = currentTrackWrite
             braccatoLyricsMount = view;
         }
         braccatoLyricsRenderer.setTheme(braccatoLyricsTheme);
-        braccatoLyricsRenderer.setLyrics(parsedLyrics, { noLyrics: false });
+        braccatoLyricsRenderer.setLyrics(parsedLyrics, {
+            noLyrics: false,
+            songwriters,
+            // Songwriter credits belong to the shell footer, not the scrollable lyric content.
+            showCredits: false,
+        });
         loading.hidden = true;
         view.hidden = false;
-        updateLyricsFooter(shadow, lyrics, songwriters);
+        updateLyricsFooter(
+            shadow,
+            lyrics,
+            songwriters,
+            parsedLyrics.some((line) => !line.isInstrumental && line.words?.trim())
+        );
         updatePlaybackControls();
     }).catch((error) => {
         console.warn("[loop.mp3] Could not load Braccato lyrics renderer:", error);
@@ -3470,12 +3584,10 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
                 ?.textContent.trim();
         const AuthorNameComposed =
             details.author_name.replace(/\s*[-–—]\s*Topic$/i, '').trim();  
-        // using ts so collabs should show and preety print dosent frucj        
+        // Use the canonical title so collaborations remain intact.
         const title =
             details.title ||
             prettyPrintMeta?.title
-        // using this so collabs dont fuck lyrics up    
-        const titleForLyrics = details.title || prettyPrintMeta?.title;
         const artist =
             prettyPrintMeta?.artist ||
             AuthorNameComposed ||
@@ -3501,22 +3613,6 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             details.album_url ||
             liveInfo.albumUrl ||
             domInfo.albumUrl;
-        let lyrics;
-        if (loopPreferences.showLyrics) {
-            lyrics = await getLyricsFromTrackInfo(
-                trackId,
-                titleForLyrics,
-                AuthorNameComposed,
-                getCurrentTrackDurationInSeconds()
-            ) || {
-                meta: null,
-                syncedLyrics: null,
-                plainLyrics: null,
-            };
-            console.log("[loop.mp3] Lyrics metadata:", lyrics.meta);
-            console.log("[loop.mp3] Synced lyrics:", lyrics.syncedLyrics);
-            console.log("[loop.mp3] Plain lyrics:", lyrics.plainLyrics);
-        }
         return {
             title,
             artist,
@@ -3524,11 +3620,6 @@ async function getTrackInfoFromTrackId(trackId, playerBar) {
             album,
             albumUrl,
             TrackWriters,
-            lyrics: lyrics ? {
-                meta: lyrics.meta,
-                syncedLyrics: lyrics.syncedLyrics,
-                plainLyrics: lyrics.plainLyrics
-            } : undefined
         };
     } catch (error) {
         showLoopNotification("Could not fetch track metadata. Information might not load correctly press F5 to try again", 4000);
@@ -3628,6 +3719,18 @@ function updateLoop(artworkURL, trackInfo) {
                     <label class="loop-navigation-toggle">
                         <input id="loop-lyrics-toggle" type="checkbox">
                         Show lyrics <span>(experimental)</span>
+                    </label>
+                    <label class="loop-navigation-toggle">
+                        <input id="loop-writer-credits-toggle" type="checkbox">
+                        Show writer credits
+                    </label>
+                    <label class="loop-navigation-toggle">
+                        <input id="loop-lyrics-cache-toggle" type="checkbox">
+                        Use lyrics cache
+                    </label>
+                    <label class="loop-navigation-toggle">
+                        <input id="loop-groove-overrides-toggle" type="checkbox" checked>
+                        Use Groove lyric overrides
                     </label>
                     <div class="loop-setting-warning" role="note">
                         Lyrics try providers in priority order and fall back when one fails.
@@ -3788,6 +3891,21 @@ function updateLoop(artworkURL, trackInfo) {
             saveLoopPreferences();
             applyLoopPreferences();
             if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
+        });
+        loop.querySelector("#loop-writer-credits-toggle").addEventListener("change", (event) => {
+            loopPreferences.showWriterCredits = event.target.checked;
+            saveLoopPreferences();
+            if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
+        });
+        loop.querySelector("#loop-lyrics-cache-toggle").addEventListener("change", (event) => {
+            loopPreferences.useLyricsCache = event.target.checked;
+            saveLoopPreferences();
+            if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack();
+        });
+        loop.querySelector("#loop-groove-overrides-toggle").addEventListener("change", (event) => {
+            loopPreferences.useGrooveOverrides = event.target.checked;
+            saveLoopPreferences();
+            if (loopPreferences.showLyrics) fetchLoopLyricsForCurrentTrack(true);
         });
         loop.querySelector("#loop-update-interval-slider").addEventListener("input", (event) => {
             loopPreferences.loopUpdateInterval = normalizeLoopUpdateInterval(event.target.value);
@@ -4303,6 +4421,14 @@ async function updateForCurrentTrack(playerBar) {
     if (requestId !== metadataRequest || trackSignature !== currentSignature) return;
     updateLoop(artworkURL, trackInfo);
     syncRecordMotion();
+    if (loopPreferences.showLyrics) {
+        // Metadata should not wait for a potentially slow lyrics provider. The
+        // lyrics request has its own request id and will update the panel when
+        // it completes, as long as this is still the active track.
+        fetchLoopLyricsForCurrentTrack().catch((error) => {
+            console.warn("[loop.mp3] Could not fetch lyrics for the current track:", error);
+        });
+    }
     console.log("[loop.mp3] Current track metadata:", trackInfo);
 }
 

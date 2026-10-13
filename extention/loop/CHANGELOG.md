@@ -1,6 +1,43 @@
 
 All notable changes to Loop are documented here.
 
+## [1.6.3] (hotfix) - 2026-10-12
+
+### Fixes
+
+* Fixed Writer's names being shown in the end of the lyrics
+* Fixed Lyrics scroll area's height
+
+## [1.6.2] - 2026-10-12
+
+### Highlights
+
+* Added settings to show or hide songwriter credits, use the lyrics cache, and use Groove lyric overrides.
+* Added Groove lyric override support, including separate cache handling when override usage changes.
+* Added links for reporting incorrect lyrics and submitting missing lyrics through Groove.
+
+### Fixes
+
+* Improved lyrics provider ordering so configured providers retain their priority while newly available providers remain selectable.
+* Added support for instrumental lyrics responses.
+
+### Internal and maintenance changes
+
+* Added the Groove development provider for local lyrics testing.
+* Added lyrics-provider metadata to cached entries so cached override results can be identified correctly.
+* Added writer-credit visibility handling to the lyrics renderer and onboarding flow.
+
+### [1.6.1] - 2026-10-11
+
+### Highlights
+
+* Added track writer credits at the end of the lyrics
+* Made rest of the metadata load befoure lyrics making metadata resolution faster
+
+### Fixes 
+* fixed lyrics footer bar not rendering in some cases
+* fixed lyrics footer bar having extra height 
+
 ## [1.6.0] - 2026-10-11
 
 ### Highlights
@@ -243,8 +280,11 @@ Load the extension directory as an unpacked Manifest V3 extension, then open You
 [1.0.0]: https://github.com/loop-mp3/loop/releases/tag/v1.0.0
 [1.1.0]: https://github.com/loop-mp3/loop/releases/tag/v1.1.0
 [1.1.1]: https://github.com/loop-mp3/loop/releases/tag/v1.1.1
-[1.1.2]: https://github.com/loop-mp3/loop/releases/tag/v1.2.0
+[1.2.0]: https://github.com/loop-mp3/loop/releases/tag/v1.2.0
 [1.3.0]: https://github.com/loop-mp3/loop/releases/tag/v1.3.0
 [1.4.0]: https://github.com/loop-mp3/loop/releases/tag/v1.4.0
 [1.5.0]: https://github.com/loop-mp3/loop/releases/tag/v1.5.0
 [1.6.0]: https://github.com/loop-mp3/loop/releases/tag/v1.6.0
+[1.6.1]: https://github.com/loop-mp3/loop/releases/tag/v1.6.1
+[1.6.2]: https://github.com/loop-mp3/loop/releases/tag/v1.6.2
+[1.6.3]: https://github.com/loop-mp3/loop/releases/tag/v1.6.3
